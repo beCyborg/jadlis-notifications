@@ -70,10 +70,19 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message string) error {
 		appIcon = ""
 	}
 
-	// Set unique AppName to prevent notification grouping/replacement
-	// Each notification gets a unique group ID based on timestamp
+	// Platform-specific AppName handling:
+	// - Windows: Use fixed AppName to prevent registry pollution. Each unique AppName
+	//   creates a persistent entry in HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\
+	//   CurrentVersion\Notifications\Settings\ that is never cleaned up.
+	//   See: https://github.com/777genius/claude-notifications-go/issues/4
+	// - macOS/Linux: Use unique AppName to prevent notification grouping/replacement,
+	//   allowing multiple notifications to be displayed simultaneously.
 	originalAppName := beeep.AppName
-	beeep.AppName = fmt.Sprintf("claude-notif-%d", time.Now().UnixNano())
+	if platform.IsWindows() {
+		beeep.AppName = "Claude Code Notifications"
+	} else {
+		beeep.AppName = fmt.Sprintf("claude-notif-%d", time.Now().UnixNano())
+	}
 	defer func() {
 		beeep.AppName = originalAppName
 	}()
