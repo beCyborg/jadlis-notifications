@@ -14,71 +14,104 @@ import (
 	"github.com/777genius/claude-notifications/internal/config"
 )
 
-func TestExtractSessionName(t *testing.T) {
+func TestExtractSessionInfo(t *testing.T) {
 	tests := []struct {
 		name             string
 		message          string
 		expectedSession  string
+		expectedBranch   string
 		expectedCleanMsg string
 	}{
 		{
 			name:             "Valid session name with message",
 			message:          "[bold-cat] Created 3 files. Edited 2 files. Took 2m 15s",
 			expectedSession:  "bold-cat",
+			expectedBranch:   "",
 			expectedCleanMsg: "Created 3 files. Edited 2 files. Took 2m 15s",
+		},
+		{
+			name:             "Session name with git branch",
+			message:          "[bold-cat|main] Created 3 files",
+			expectedSession:  "bold-cat",
+			expectedBranch:   "main",
+			expectedCleanMsg: "Created 3 files",
+		},
+		{
+			name:             "Session with feature branch",
+			message:          "[swift-eagle|feature/auth] Task complete",
+			expectedSession:  "swift-eagle",
+			expectedBranch:   "feature/auth",
+			expectedCleanMsg: "Task complete",
 		},
 		{
 			name:             "Valid session name with short message",
 			message:          "[swift-eagle] Task complete",
 			expectedSession:  "swift-eagle",
+			expectedBranch:   "",
 			expectedCleanMsg: "Task complete",
 		},
 		{
 			name:             "Message without session name",
 			message:          "Task completed successfully",
 			expectedSession:  "",
+			expectedBranch:   "",
 			expectedCleanMsg: "Task completed successfully",
 		},
 		{
 			name:             "Message with only opening bracket",
 			message:          "[no-closing-bracket Task complete",
 			expectedSession:  "",
+			expectedBranch:   "",
 			expectedCleanMsg: "[no-closing-bracket Task complete",
 		},
 		{
 			name:             "Empty message",
 			message:          "",
 			expectedSession:  "",
+			expectedBranch:   "",
 			expectedCleanMsg: "",
 		},
 		{
 			name:             "Session name with extra spaces",
 			message:          "[cool-fox]   Multiple   spaces   message",
 			expectedSession:  "cool-fox",
+			expectedBranch:   "",
 			expectedCleanMsg: "Multiple   spaces   message",
 		},
 		{
 			name:             "Session name only (no message)",
 			message:          "[lonely-wolf]",
 			expectedSession:  "lonely-wolf",
+			expectedBranch:   "",
 			expectedCleanMsg: "",
 		},
 		{
 			name:             "Leading/trailing spaces",
 			message:          "  [trim-test] Message with spaces  ",
 			expectedSession:  "trim-test",
+			expectedBranch:   "",
 			expectedCleanMsg: "Message with spaces",
+		},
+		{
+			name:             "Session with branch only (no message)",
+			message:          "[test-session|develop]",
+			expectedSession:  "test-session",
+			expectedBranch:   "develop",
+			expectedCleanMsg: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			session, cleanMsg := extractSessionName(tt.message)
+			session, branch, cleanMsg := extractSessionInfo(tt.message)
 			if session != tt.expectedSession {
-				t.Errorf("extractSessionName(%q) session = %q, want %q", tt.message, session, tt.expectedSession)
+				t.Errorf("extractSessionInfo(%q) session = %q, want %q", tt.message, session, tt.expectedSession)
+			}
+			if branch != tt.expectedBranch {
+				t.Errorf("extractSessionInfo(%q) branch = %q, want %q", tt.message, branch, tt.expectedBranch)
 			}
 			if cleanMsg != tt.expectedCleanMsg {
-				t.Errorf("extractSessionName(%q) cleanMsg = %q, want %q", tt.message, cleanMsg, tt.expectedCleanMsg)
+				t.Errorf("extractSessionInfo(%q) cleanMsg = %q, want %q", tt.message, cleanMsg, tt.expectedCleanMsg)
 			}
 		})
 	}
@@ -391,65 +424,83 @@ func TestNotifier_CloseWithoutPlayback(t *testing.T) {
 	}
 }
 
-func TestExtractSessionName_MoreCases(t *testing.T) {
+func TestExtractSessionInfo_MoreCases(t *testing.T) {
 	tests := []struct {
 		name             string
 		message          string
 		expectedSession  string
+		expectedBranch   string
 		expectedCleanMsg string
 	}{
 		{
 			name:             "Nested brackets",
 			message:          "[outer] message with [inner] brackets",
 			expectedSession:  "outer",
+			expectedBranch:   "",
 			expectedCleanMsg: "message with [inner] brackets",
 		},
 		{
 			name:             "Multiple brackets at start",
 			message:          "[first][second] message",
 			expectedSession:  "first",
+			expectedBranch:   "",
 			expectedCleanMsg: "[second] message",
 		},
 		{
 			name:             "Bracket in middle",
 			message:          "message [not-session] here",
 			expectedSession:  "",
+			expectedBranch:   "",
 			expectedCleanMsg: "message [not-session] here",
 		},
 		{
 			name:             "Only brackets with text",
 			message:          "[]",
 			expectedSession:  "",
+			expectedBranch:   "",
 			expectedCleanMsg: "",
 		},
 		{
 			name:             "Hyphenated session name",
 			message:          "[bold-red-fox] Long message here",
 			expectedSession:  "bold-red-fox",
+			expectedBranch:   "",
 			expectedCleanMsg: "Long message here",
 		},
 		{
 			name:             "Underscored session name",
 			message:          "[session_with_underscores] Message",
 			expectedSession:  "session_with_underscores",
+			expectedBranch:   "",
 			expectedCleanMsg: "Message",
 		},
 		{
 			name:             "Numeric session name",
 			message:          "[session123] Message",
 			expectedSession:  "session123",
+			expectedBranch:   "",
 			expectedCleanMsg: "Message",
+		},
+		{
+			name:             "Session with branch containing slash",
+			message:          "[test-session|feature/new-feature] Work in progress",
+			expectedSession:  "test-session",
+			expectedBranch:   "feature/new-feature",
+			expectedCleanMsg: "Work in progress",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			session, cleanMsg := extractSessionName(tt.message)
+			session, branch, cleanMsg := extractSessionInfo(tt.message)
 			if session != tt.expectedSession {
-				t.Errorf("extractSessionName(%q) session = %q, want %q", tt.message, session, tt.expectedSession)
+				t.Errorf("extractSessionInfo(%q) session = %q, want %q", tt.message, session, tt.expectedSession)
+			}
+			if branch != tt.expectedBranch {
+				t.Errorf("extractSessionInfo(%q) branch = %q, want %q", tt.message, branch, tt.expectedBranch)
 			}
 			if cleanMsg != tt.expectedCleanMsg {
-				t.Errorf("extractSessionName(%q) cleanMsg = %q, want %q", tt.message, cleanMsg, tt.expectedCleanMsg)
+				t.Errorf("extractSessionInfo(%q) cleanMsg = %q, want %q", tt.message, cleanMsg, tt.expectedCleanMsg)
 			}
 		})
 	}
@@ -880,24 +931,29 @@ func TestSendDesktop_UnicodeMessage(t *testing.T) {
 	_ = err
 }
 
-func TestExtractSessionName_Unicode(t *testing.T) {
+func TestExtractSessionInfo_Unicode(t *testing.T) {
 	tests := []struct {
 		message          string
 		expectedSession  string
+		expectedBranch   string
 		expectedCleanMsg string
 	}{
-		{"[тест-сессия] Сообщение", "тест-сессия", "Сообщение"},
-		{"[日本語] Japanese text", "日本語", "Japanese text"},
-		{"[émoji-🎉] Fun message", "émoji-🎉", "Fun message"},
+		{"[тест-сессия] Сообщение", "тест-сессия", "", "Сообщение"},
+		{"[日本語] Japanese text", "日本語", "", "Japanese text"},
+		{"[émoji-🎉] Fun message", "émoji-🎉", "", "Fun message"},
+		{"[тест|ветка] С веткой", "тест", "ветка", "С веткой"},
 	}
 
 	for _, tt := range tests {
-		session, cleanMsg := extractSessionName(tt.message)
+		session, branch, cleanMsg := extractSessionInfo(tt.message)
 		if session != tt.expectedSession {
-			t.Errorf("extractSessionName(%q) session = %q, want %q", tt.message, session, tt.expectedSession)
+			t.Errorf("extractSessionInfo(%q) session = %q, want %q", tt.message, session, tt.expectedSession)
+		}
+		if branch != tt.expectedBranch {
+			t.Errorf("extractSessionInfo(%q) branch = %q, want %q", tt.message, branch, tt.expectedBranch)
 		}
 		if cleanMsg != tt.expectedCleanMsg {
-			t.Errorf("extractSessionName(%q) cleanMsg = %q, want %q", tt.message, cleanMsg, tt.expectedCleanMsg)
+			t.Errorf("extractSessionInfo(%q) cleanMsg = %q, want %q", tt.message, cleanMsg, tt.expectedCleanMsg)
 		}
 	}
 }

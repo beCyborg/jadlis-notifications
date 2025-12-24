@@ -241,7 +241,7 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 	message := h.generateMessage(&hookData, status)
 
 	// Send notifications
-	h.sendNotifications(status, message, hookData.SessionID)
+	h.sendNotifications(status, message, hookData.SessionID, hookData.CWD)
 
 	logging.Debug("=== Hook completed: %s ===", hookEvent)
 	return nil
@@ -309,15 +309,23 @@ func (h *Handler) generateMessage(hookData *HookData, status analyzer.Status) st
 }
 
 // sendNotifications sends desktop and webhook notifications
-func (h *Handler) sendNotifications(status analyzer.Status, message, sessionID string) {
+func (h *Handler) sendNotifications(status analyzer.Status, message, sessionID, cwd string) {
 	// Add panic recovery to prevent notification failures from crashing the plugin
 	defer errorhandler.HandlePanic()
 
-	// Add session name to message (like bash version: "[bold-cat]")
+	// Add session name and git branch to message
 	sessionName := sessionname.GenerateSessionName(sessionID)
-	enhancedMessage := fmt.Sprintf("[%s] %s", sessionName, message)
+	gitBranch := platform.GetGitBranch(cwd)
 
-	logging.Debug("Session name: %s", sessionName)
+	// Format: "[session-name|branch] message" or "[session-name] message"
+	var enhancedMessage string
+	if gitBranch != "" {
+		enhancedMessage = fmt.Sprintf("[%s|%s] %s", sessionName, gitBranch, message)
+	} else {
+		enhancedMessage = fmt.Sprintf("[%s] %s", sessionName, message)
+	}
+
+	logging.Debug("Session name: %s, git branch: %s", sessionName, gitBranch)
 
 	// Send desktop notification
 	if h.cfg.IsDesktopEnabled() {

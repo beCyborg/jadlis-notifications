@@ -56,13 +56,19 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message string) error {
 		return fmt.Errorf("unknown status: %s", status)
 	}
 
-	// Extract session name from message (format: "[session-name] actual message")
-	sessionName, cleanMessage := extractSessionName(message)
+	// Extract session name and git branch from message
+	// Format: "[session-name|branch] actual message" or "[session-name] actual message"
+	sessionName, gitBranch, cleanMessage := extractSessionInfo(message)
 
-	// Build proper title with session name
+	// Build proper title with session name and git branch
+	// Format: "✅ Completed [brave-ocean] main" or "✅ Completed [brave-ocean]"
 	title := statusInfo.Title
 	if sessionName != "" {
-		title = fmt.Sprintf("%s [%s]", title, sessionName)
+		if gitBranch != "" {
+			title = fmt.Sprintf("%s [%s] %s", title, sessionName, gitBranch)
+		} else {
+			title = fmt.Sprintf("%s [%s]", title, sessionName)
+		}
 	}
 
 	// Get app icon path if configured
@@ -451,27 +457,37 @@ func (n *Notifier) Close() error {
 	return nil
 }
 
-// extractSessionName extracts session name from message with format "[session-name] message"
-// Returns session name and clean message without the prefix
-func extractSessionName(message string) (string, string) {
+// extractSessionInfo extracts session name and git branch from message
+// Format: "[session-name|branch] message" or "[session-name] message"
+// Returns session name, git branch (may be empty), and clean message
+func extractSessionInfo(message string) (sessionName, gitBranch, cleanMessage string) {
 	message = strings.TrimSpace(message)
 
 	// Check if message starts with [
 	if !strings.HasPrefix(message, "[") {
-		return "", message
+		return "", "", message
 	}
 
 	// Find closing bracket
 	closingIdx := strings.Index(message, "]")
 	if closingIdx == -1 {
-		return "", message
+		return "", "", message
 	}
 
-	// Extract session name (without brackets)
-	sessionName := message[1:closingIdx]
+	// Extract content inside brackets
+	bracketContent := message[1:closingIdx]
+
+	// Check if there's a pipe separator for git branch
+	if pipeIdx := strings.Index(bracketContent, "|"); pipeIdx != -1 {
+		sessionName = bracketContent[:pipeIdx]
+		gitBranch = bracketContent[pipeIdx+1:]
+	} else {
+		sessionName = bracketContent
+		gitBranch = ""
+	}
 
 	// Extract clean message (everything after "] ")
-	cleanMessage := strings.TrimSpace(message[closingIdx+1:])
+	cleanMessage = strings.TrimSpace(message[closingIdx+1:])
 
-	return sessionName, cleanMessage
+	return sessionName, gitBranch, cleanMessage
 }
