@@ -625,6 +625,11 @@ func TestSendWithTerminalNotifier_Integration(t *testing.T) {
 		t.Skip("Skipping macOS-only test")
 	}
 
+	// Skip in CI - no NotificationCenter available
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("Skipping in CI - no NotificationCenter available")
+	}
+
 	// Check if terminal-notifier is available
 	if !IsTerminalNotifierAvailable() {
 		t.Skip("terminal-notifier not installed, skipping integration test")
