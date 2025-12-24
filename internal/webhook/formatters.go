@@ -121,3 +121,59 @@ func getEmojiForStatus(status analyzer.Status) string {
 		return "ℹ️"
 	}
 }
+
+// LarkFormatter formats messages for Feishu/Lark with interactive cards
+type LarkFormatter struct{}
+
+func (f *LarkFormatter) Format(status analyzer.Status, message, sessionID string, statusInfo config.StatusInfo) (interface{}, error) {
+	return map[string]interface{}{
+		"msg_type": "interactive",
+		"card": map[string]interface{}{
+			"config": map[string]interface{}{
+				"wide_screen_mode": true,
+			},
+			"header": map[string]interface{}{
+				"title": map[string]interface{}{
+					"tag":     "plain_text",
+					"content": statusInfo.Title,
+				},
+				"template": getLarkColorTemplate(status),
+			},
+			"elements": []map[string]interface{}{
+				{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"tag":     "plain_text",
+						"content": message,
+					},
+				},
+				{
+					"tag": "hr",
+				},
+				{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"tag":     "plain_text",
+						"content": fmt.Sprintf("Session: %s", sessionID),
+					},
+				},
+			},
+		},
+	}, nil
+}
+
+// getLarkColorTemplate returns Lark color template for status
+func getLarkColorTemplate(status analyzer.Status) string {
+	switch status {
+	case analyzer.StatusTaskComplete:
+		return "green"
+	case analyzer.StatusReviewComplete:
+		return "yellow"
+	case analyzer.StatusQuestion:
+		return "red"
+	case analyzer.StatusPlanReady:
+		return "blue"
+	default:
+		return "grey"
+	}
+}

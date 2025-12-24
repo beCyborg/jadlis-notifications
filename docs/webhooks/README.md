@@ -2,7 +2,7 @@
 
 **Professional webhook system with enterprise-grade reliability patterns.**
 
-Send Claude Code notifications to Slack, Discord, Telegram, or custom endpoints with built-in retry, circuit breaker, and rate limiting.
+Send Claude Code notifications to Slack, Discord, Telegram, Lark/Feishu, or custom endpoints with built-in retry, circuit breaker, and rate limiting.
 
 ## Quick Start
 
@@ -38,6 +38,7 @@ Choose your platform for detailed setup instructions:
 - **[Slack](slack.md)** - Color-coded attachments in Slack channels
 - **[Discord](discord.md)** - Rich embeds with timestamps
 - **[Telegram](telegram.md)** - HTML-formatted messages via bot
+- **[Lark/Feishu](lark.md)** - Interactive cards with colored headers
 
 ### Other Options
 

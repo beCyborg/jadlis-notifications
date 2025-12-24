@@ -238,10 +238,11 @@ func (c *Config) Validate() error {
 		"slack":    true,
 		"discord":  true,
 		"telegram": true,
+		"lark":     true,
 		"custom":   true,
 	}
 	if c.Notifications.Webhook.Enabled && !validPresets[c.Notifications.Webhook.Preset] {
-		return fmt.Errorf("invalid webhook preset: %s (must be one of: slack, discord, telegram, custom)", c.Notifications.Webhook.Preset)
+		return fmt.Errorf("invalid webhook preset: %s (must be one of: slack, discord, telegram, lark, custom)", c.Notifications.Webhook.Preset)
 	}
 
 	// Validate webhook format (only if webhooks are enabled)

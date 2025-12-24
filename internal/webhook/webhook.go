@@ -67,6 +67,7 @@ func New(cfg *config.Config) *Sender {
 		"slack":    &SlackFormatter{},
 		"discord":  &DiscordFormatter{},
 		"telegram": &TelegramFormatter{ChatID: cfg.Notifications.Webhook.ChatID},
+		"lark":     &LarkFormatter{},
 	}
 
 	// Create context for graceful shutdown

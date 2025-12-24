@@ -383,3 +383,188 @@ func TestGetEmojiForStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestLarkFormatterFormat(t *testing.T) {
+	formatter := &LarkFormatter{}
+	statusInfo := config.StatusInfo{
+		Title: "Task Complete",
+	}
+
+	result, err := formatter.Format(
+		analyzer.StatusTaskComplete,
+		"The task has been completed successfully",
+		"session-123",
+		statusInfo,
+	)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify structure
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatal("Result should be a map")
+	}
+
+	// Check msg_type
+	msgType, ok := resultMap["msg_type"].(string)
+	if !ok || msgType != "interactive" {
+		t.Errorf("Expected msg_type 'interactive', got %v", msgType)
+	}
+
+	// Check card
+	card, ok := resultMap["card"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Should have card map")
+	}
+
+	// Check config
+	config, ok := card["config"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Should have config map")
+	}
+
+	wideScreen, ok := config["wide_screen_mode"].(bool)
+	if !ok || !wideScreen {
+		t.Errorf("Expected wide_screen_mode true, got %v", wideScreen)
+	}
+
+	// Check header
+	header, ok := card["header"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Should have header map")
+	}
+
+	title, ok := header["title"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Header should have title map")
+	}
+
+	titleTag, ok := title["tag"].(string)
+	if !ok || titleTag != "plain_text" {
+		t.Errorf("Expected title tag 'plain_text', got %v", titleTag)
+	}
+
+	titleContent, ok := title["content"].(string)
+	if !ok || titleContent != "Task Complete" {
+		t.Errorf("Expected title 'Task Complete', got %v", titleContent)
+	}
+
+	// Check template color
+	template, ok := header["template"].(string)
+	if !ok || template != "green" {
+		t.Errorf("Expected template 'green' for task_complete, got %v", template)
+	}
+
+	// Check elements
+	elements, ok := card["elements"].([]map[string]interface{})
+	if !ok || len(elements) != 3 {
+		t.Fatalf("Expected 3 elements, got %d", len(elements))
+	}
+
+	// Check first element (message div)
+	msgDiv := elements[0]
+	if msgDiv["tag"] != "div" {
+		t.Errorf("Expected first element tag 'div', got %v", msgDiv["tag"])
+	}
+
+	msgText, ok := msgDiv["text"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Message div should have text map")
+	}
+
+	msgContent, ok := msgText["content"].(string)
+	if !ok || msgContent != "The task has been completed successfully" {
+		t.Errorf("Expected message content, got %v", msgContent)
+	}
+
+	// Verify it's valid JSON
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Errorf("Result should be JSON-serializable: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("JSON data should not be empty")
+	}
+}
+
+func TestLarkFormatterColors(t *testing.T) {
+	formatter := &LarkFormatter{}
+	statusInfo := config.StatusInfo{Title: "Test"}
+
+	tests := []struct {
+		status           analyzer.Status
+		expectedTemplate string
+	}{
+		{analyzer.StatusTaskComplete, "green"},
+		{analyzer.StatusReviewComplete, "yellow"},
+		{analyzer.StatusQuestion, "red"},
+		{analyzer.StatusPlanReady, "blue"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			result, err := formatter.Format(tt.status, "test", "session-1", statusInfo)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			resultMap := result.(map[string]interface{})
+			card := resultMap["card"].(map[string]interface{})
+			header := card["header"].(map[string]interface{})
+			template := header["template"].(string)
+
+			if template != tt.expectedTemplate {
+				t.Errorf("Expected template %s for %s, got %s", tt.expectedTemplate, tt.status, template)
+			}
+		})
+	}
+}
+
+func TestLarkFormatterUnknownStatus(t *testing.T) {
+	formatter := &LarkFormatter{}
+	statusInfo := config.StatusInfo{Title: "Unknown"}
+
+	result, err := formatter.Format(
+		analyzer.Status("unknown"),
+		"Unknown status",
+		"session-999",
+		statusInfo,
+	)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	resultMap := result.(map[string]interface{})
+	card := resultMap["card"].(map[string]interface{})
+	header := card["header"].(map[string]interface{})
+	template := header["template"].(string)
+
+	if template != "grey" {
+		t.Errorf("Expected template 'grey' for unknown status, got %s", template)
+	}
+}
+
+func TestGetLarkColorTemplate(t *testing.T) {
+	tests := []struct {
+		status   analyzer.Status
+		expected string
+	}{
+		{analyzer.StatusTaskComplete, "green"},
+		{analyzer.StatusReviewComplete, "yellow"},
+		{analyzer.StatusQuestion, "red"},
+		{analyzer.StatusPlanReady, "blue"},
+		{analyzer.Status("unknown"), "grey"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			result := getLarkColorTemplate(tt.status)
+			if result != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result)
+			}
+		})
+	}
+}

@@ -31,7 +31,7 @@ Complete configuration options for webhook reliability features.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `enabled` | boolean | Yes | Enable/disable webhook notifications |
-| `preset` | string | Yes | Platform preset: `"slack"`, `"discord"`, `"telegram"`, or `""` (custom) |
+| `preset` | string | Yes | Platform preset: `"slack"`, `"discord"`, `"telegram"`, `"lark"`, or `""` (custom) |
 | `url` | string | Yes | Webhook endpoint URL |
 
 ### Optional Fields
@@ -292,6 +292,7 @@ Token bucket rate limiting to prevent API overload.
 | **Slack** | ~1 msg/sec | `requestsPerMinute: 20` |
 | **Discord** | 5 msg/2sec | `requestsPerMinute: 30` |
 | **Telegram** | 30 msg/sec | `requestsPerMinute: 60` |
+| **Lark/Feishu** | ~1 msg/sec | `requestsPerMinute: 20` |
 | **Custom** | Varies | Match endpoint limit |
 
 ### Recommendations
@@ -508,6 +509,7 @@ Optimized for frequent notifications:
 - [Slack Setup](slack.md)
 - [Discord Setup](discord.md)
 - [Telegram Setup](telegram.md)
+- [Lark/Feishu Setup](lark.md)
 - [Custom Webhooks](custom.md)
 - [Monitoring & Metrics](monitoring.md)
 - [Troubleshooting](troubleshooting.md)

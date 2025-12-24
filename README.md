@@ -101,7 +101,7 @@ The binary is downloaded once and cached locally. You can re-run `/claude-notifi
 
 ### 🔔 Flexible Notifications
 - **Desktop notifications** with custom icons and sounds
-- **Webhook integrations**: Slack, Discord, Telegram, and custom endpoints
+- **Webhook integrations**: Slack, Discord, Telegram, Lark/Feishu, and custom endpoints
 - **Session names**: Friendly identifiers like `[bold-cat]` for multi-session tracking
 - **Cooldown system** to prevent notification spam
 
@@ -388,6 +388,7 @@ go test -run TestStateMachine ./internal/analyzer -v
   - **[Slack](docs/webhooks/slack.md)** - Slack integration with color-coded attachments
   - **[Discord](docs/webhooks/discord.md)** - Discord integration with rich embeds
   - **[Telegram](docs/webhooks/telegram.md)** - Telegram bot integration
+  - **[Lark/Feishu](docs/webhooks/lark.md)** - Lark/Feishu integration with interactive cards
   - **[Custom Webhooks](docs/webhooks/custom.md)** - Any webhook-compatible service
   - **[Configuration](docs/webhooks/configuration.md)** - Retry, circuit breaker, rate limiting
   - **[Monitoring](docs/webhooks/monitoring.md)** - Metrics and debugging
