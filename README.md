@@ -11,7 +11,7 @@
 <img width="220" alt="image" src="https://github.com/user-attachments/assets/4b5929d8-1a51-4a15-a3d5-dda5482554cc" />
 
 
-Smart notifications for Claude Code task statuses with cross-platform support, webhook integrations.
+Smart notifications for Claude Code with click-to-focus, git branch display, and webhook integrations.
 
 ## Table of Contents
 
@@ -103,6 +103,7 @@ The binary is downloaded once and cached locally. You can re-run `/claude-notifi
 ### 🔔 Flexible Notifications
 - **Desktop notifications** with custom icons and sounds
 - **Click-to-focus** (macOS): Click notification to activate your terminal window
+- **Git branch in title**: See current branch like `✅ Completed [bold-cat] main`
 - **Webhook integrations**: Slack, Discord, Telegram, Lark/Feishu, and custom endpoints
 - **Session names**: Friendly identifiers like `[bold-cat]` for multi-session tracking
 - **Cooldown system** to prevent notification spam
