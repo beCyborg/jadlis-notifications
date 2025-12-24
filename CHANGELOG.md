@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-12-24
+
+### Added
+- **Click-to-focus notifications on macOS** 🎯
+  - Clicking a notification activates your terminal window
+  - Auto-detects terminal app (Warp, iTerm, Terminal, kitty, Alacritty, etc.)
+  - Uses `terminal-notifier` under the hood
+  - Enable with `"clickToFocus": true` in desktop config (enabled by default)
+  - Manual override: `"terminalBundleID": "com.your.terminal"`
+
+- **Claude icon in notifications** 🤖
+  - Custom Claude icon displayed on the left side of macOS notifications
+  - Auto-creates `ClaudeNotifications.app` on first notification
+  - No manual setup required — works automatically after plugin update
+
+### Changed
+- **Shorter notification titles**
+  - `✅ Task Completed` → `✅ Completed`
+  - `🔍 Review Completed` → `🔍 Review`
+  - `❓ Claude Has Questions` → `❓ Question`
+  - `📋 Plan Ready for Review` → `📋 Plan`
+
+### Technical
+- Added `EnsureClaudeNotificationsApp()` for on-the-fly app creation
+- Terminal bundle ID detection via `__CFBundleIdentifier` and `TERM_PROGRAM`
+- Uses `-sender com.claude.notifications` for reliable icon display
+
 ## [1.3.0] - 2025-12-24
 
 ### Added

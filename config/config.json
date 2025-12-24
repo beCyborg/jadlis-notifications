@@ -4,7 +4,9 @@
       "enabled": true,
       "sound": true,
       "volume": 1.0,
-      "appIcon": "${CLAUDE_PLUGIN_ROOT}/claude_icon.png"
+      "appIcon": "${CLAUDE_PLUGIN_ROOT}/claude_icon.png",
+      "clickToFocus": true,
+      "terminalBundleId": ""
     },
     "webhook": {
       "enabled": false,
@@ -19,22 +21,22 @@
   },
   "statuses": {
     "task_complete": {
-      "title": "✅ Task Completed",
+      "title": "✅ Completed",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/task-complete.mp3",
       "keywords": ["completed", "done", "finished", "успешно", "завершен"]
     },
     "review_complete": {
-      "title": "🔍 Review Completed",
+      "title": "🔍 Review",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/review-complete.mp3",
       "keywords": ["review", "ревью", "analyzed", "проверка", "analysis"]
     },
     "question": {
-      "title": "❓ Claude Has Questions",
+      "title": "❓ Question",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/question.mp3",
       "keywords": ["question", "вопрос", "clarify"]
     },
     "plan_ready": {
-      "title": "📋 Plan Ready for Review",
+      "title": "📋 Plan",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/plan-ready.mp3",
       "keywords": ["plan", "план", "strategy"]
     },

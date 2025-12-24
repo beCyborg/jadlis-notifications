@@ -27,6 +27,7 @@ Smart notifications for Claude Code task statuses with cross-platform support, w
     - [🌐 Enterprise-Grade Webhooks](#-enterprise-grade-webhooks)
     - [🛠️ Developer Experience](#️-developer-experience)
   - [Platform Support](#platform-support)
+    - [macOS Click-to-Focus](#macos-click-to-focus)
   - [Quick Start](#quick-start)
     - [Interactive Setup (Recommended)](#interactive-setup-recommended)
     - [Manual Configuration](#manual-configuration)
@@ -101,6 +102,7 @@ The binary is downloaded once and cached locally. You can re-run `/claude-notifi
 
 ### 🔔 Flexible Notifications
 - **Desktop notifications** with custom icons and sounds
+- **Click-to-focus** (macOS): Click notification to activate your terminal window
 - **Webhook integrations**: Slack, Discord, Telegram, Lark/Feishu, and custom endpoints
 - **Session names**: Friendly identifiers like `[bold-cat]` for multi-session tracking
 - **Cooldown system** to prevent notification spam
@@ -151,6 +153,37 @@ The binary is downloaded once and cached locally. You can re-run `/claude-notifi
 - Works in PowerShell, CMD, Git Bash, or WSL
 - MP3/WAV/OGG/FLAC audio playback via native Windows APIs
 - System sounds not accessible - use built-in MP3s or custom files
+
+### macOS Click-to-Focus
+
+On macOS, clicking a notification will activate your terminal window - no more hunting for the right window!
+
+**How it works:**
+- Automatically detects your terminal (iTerm2, Warp, Terminal.app, kitty, Ghostty, WezTerm, Alacritty)
+- Uses `terminal-notifier` (auto-installed via `/notifications-init`)
+- Falls back to standard notifications if terminal-notifier is unavailable
+
+**Configuration** (in `config/config.json`):
+```json
+{
+  "notifications": {
+    "desktop": {
+      "clickToFocus": true,
+      "terminalBundleId": ""
+    }
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `clickToFocus` | `true` | Enable click-to-focus on macOS |
+| `terminalBundleId` | `""` | Override auto-detected terminal. Use bundle ID like `com.googlecode.iterm2` |
+
+**Supported terminals (auto-detected):**
+- Terminal.app, iTerm2, Warp, kitty, Ghostty, WezTerm, Alacritty, Hyper, VS Code
+
+To find your terminal's bundle ID: `osascript -e 'id of app "YourTerminal"'`
 
 ## Quick Start
 

@@ -26,10 +26,12 @@ type NotificationsConfig struct {
 
 // DesktopConfig represents desktop notification settings
 type DesktopConfig struct {
-	Enabled bool    `json:"enabled"`
-	Sound   bool    `json:"sound"`
-	Volume  float64 `json:"volume"` // Volume level 0.0-1.0, default 1.0 (full volume)
-	AppIcon string  `json:"appIcon"`
+	Enabled          bool    `json:"enabled"`
+	Sound            bool    `json:"sound"`
+	Volume           float64 `json:"volume"`           // Volume level 0.0-1.0, default 1.0 (full volume)
+	AppIcon          string  `json:"appIcon"`          // Path to app icon
+	ClickToFocus     bool    `json:"clickToFocus"`     // macOS: activate terminal on notification click (default: true)
+	TerminalBundleID string  `json:"terminalBundleId"` // macOS: override auto-detected terminal bundle ID (empty = auto)
 }
 
 // WebhookConfig represents webhook settings
@@ -84,10 +86,12 @@ func DefaultConfig() *Config {
 	return &Config{
 		Notifications: NotificationsConfig{
 			Desktop: DesktopConfig{
-				Enabled: true,
-				Sound:   true,
-				Volume:  1.0, // Full volume by default
-				AppIcon: filepath.Join(pluginRoot, "claude_icon.png"),
+				Enabled:      true,
+				Sound:        true,
+				Volume:       1.0, // Full volume by default
+				AppIcon:      filepath.Join(pluginRoot, "claude_icon.png"),
+				ClickToFocus: true, // macOS: activate terminal on click (default: enabled)
+				// TerminalBundleID: "" - empty means auto-detect
 			},
 			Webhook: WebhookConfig{
 				Enabled: false,
@@ -118,19 +122,19 @@ func DefaultConfig() *Config {
 		},
 		Statuses: map[string]StatusInfo{
 			"task_complete": {
-				Title: "✅ Task Completed",
+				Title: "✅ Completed",
 				Sound: filepath.Join(pluginRoot, "sounds", "task-complete.mp3"),
 			},
 			"review_complete": {
-				Title: "🔍 Review Completed",
+				Title: "🔍 Review",
 				Sound: filepath.Join(pluginRoot, "sounds", "review-complete.mp3"),
 			},
 			"question": {
-				Title: "❓ Claude Has Questions",
+				Title: "❓ Question",
 				Sound: filepath.Join(pluginRoot, "sounds", "question.mp3"),
 			},
 			"plan_ready": {
-				Title: "📋 Plan Ready for Review",
+				Title: "📋 Plan",
 				Sound: filepath.Join(pluginRoot, "sounds", "plan-ready.mp3"),
 			},
 			"session_limit_reached": {

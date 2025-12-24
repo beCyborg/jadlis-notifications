@@ -3,6 +3,7 @@ package notifier
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -43,6 +44,7 @@ func New(cfg *config.Config) *Notifier {
 }
 
 // SendDesktop sends a desktop notification using beeep (cross-platform)
+// On macOS with clickToFocus enabled, uses terminal-notifier for click-to-focus support
 func (n *Notifier) SendDesktop(status analyzer.Status, message string) error {
 	if !n.cfg.IsDesktopEnabled() {
 		logging.Debug("Desktop notifications disabled, skipping")
@@ -70,6 +72,74 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message string) error {
 		appIcon = ""
 	}
 
+	// macOS: Try terminal-notifier for click-to-focus support
+	if platform.IsMacOS() && n.cfg.Notifications.Desktop.ClickToFocus {
+		if IsTerminalNotifierAvailable() {
+			if err := n.sendWithTerminalNotifier(title, cleanMessage); err != nil {
+				logging.Warn("terminal-notifier failed, falling back to beeep: %v", err)
+				// Fall through to beeep
+			} else {
+				logging.Debug("Desktop notification sent via terminal-notifier: title=%s", title)
+				n.playSoundAsync(statusInfo.Sound)
+				return nil
+			}
+		} else {
+			logging.Debug("terminal-notifier not available, using beeep (run /notifications-init to enable click-to-focus)")
+		}
+	}
+
+	// Standard path: beeep (Windows, Linux, macOS fallback)
+	return n.sendWithBeeep(title, cleanMessage, appIcon, statusInfo.Sound)
+}
+
+// sendWithTerminalNotifier sends notification via terminal-notifier on macOS
+// with click-to-focus support (clicking notification activates the terminal)
+func (n *Notifier) sendWithTerminalNotifier(title, message string) error {
+	// Ensure ClaudeNotifications.app exists for notification icon
+	// This creates it on-the-fly if user updated plugin without running /notifications-init
+	if err := EnsureClaudeNotificationsApp(); err != nil {
+		logging.Debug("Could not ensure ClaudeNotifications.app: %v", err)
+	}
+
+	notifierPath, err := GetTerminalNotifierPath()
+	if err != nil {
+		return fmt.Errorf("terminal-notifier not found: %w", err)
+	}
+
+	bundleID := GetTerminalBundleID(n.cfg.Notifications.Desktop.TerminalBundleID)
+	args := buildTerminalNotifierArgs(title, message, bundleID)
+
+	cmd := exec.Command(notifierPath, args...)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("terminal-notifier error: %w, output: %s", err, string(output))
+	}
+
+	logging.Debug("terminal-notifier executed: bundleID=%s", bundleID)
+	return nil
+}
+
+// buildTerminalNotifierArgs constructs command-line arguments for terminal-notifier.
+// Exported for testing purposes.
+func buildTerminalNotifierArgs(title, message, bundleID string) []string {
+	args := []string{
+		"-title", title,
+		"-message", message,
+		"-activate", bundleID,
+		// Use custom sender app for Claude icon on the left side of notification
+		// The ClaudeNotifications.app must be registered with Launch Services
+		"-sender", "com.claude.notifications",
+	}
+
+	// Add group ID to prevent notification stacking issues
+	args = append(args, "-group", fmt.Sprintf("claude-notif-%d", time.Now().UnixNano()))
+
+	return args
+}
+
+// sendWithBeeep sends notification via beeep (cross-platform)
+func (n *Notifier) sendWithBeeep(title, message, appIcon, sound string) error {
 	// Platform-specific AppName handling:
 	// - Windows: Use fixed AppName to prevent registry pollution. Each unique AppName
 	//   creates a persistent entry in HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\
@@ -88,24 +158,27 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message string) error {
 	}()
 
 	// Send notification using beeep with proper title and clean message
-	if err := beeep.Notify(title, cleanMessage, appIcon); err != nil {
+	if err := beeep.Notify(title, message, appIcon); err != nil {
 		logging.Error("Failed to send desktop notification: %v", err)
 		return err
 	}
 
 	logging.Debug("Desktop notification sent via beeep: title=%s", title)
 
-	// Play sound if enabled (sequential playback handled by speaker mixer)
-	if n.cfg.Notifications.Desktop.Sound && statusInfo.Sound != "" {
+	n.playSoundAsync(sound)
+	return nil
+}
+
+// playSoundAsync plays sound asynchronously if enabled
+func (n *Notifier) playSoundAsync(sound string) {
+	if n.cfg.Notifications.Desktop.Sound && sound != "" {
 		n.wg.Add(1)
 		// Use SafeGo to protect against panics in sound playback goroutine
 		errorhandler.SafeGo(func() {
 			defer n.wg.Done()
-			n.playSound(statusInfo.Sound)
+			n.playSound(sound)
 		})
 	}
-
-	return nil
 }
 
 // initSpeaker initializes the speaker once with sync.Once

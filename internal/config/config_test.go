@@ -161,7 +161,7 @@ func TestGetStatusInfo(t *testing.T) {
 
 	info, exists := cfg.GetStatusInfo("task_complete")
 	assert.True(t, exists)
-	assert.Contains(t, info.Title, "Task Completed")
+	assert.Contains(t, info.Title, "Completed")
 
 	_, exists = cfg.GetStatusInfo("nonexistent")
 	assert.False(t, exists)
@@ -505,4 +505,128 @@ func TestValidate_NegativeCooldown(t *testing.T) {
 	err := cfg.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "suppressQuestionAfterTaskCompleteSeconds must be >= 0")
+}
+
+// === Tests for Click-to-Focus settings ===
+
+func TestDefaultConfig_ClickToFocus(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// ClickToFocus should be enabled by default
+	assert.True(t, cfg.Notifications.Desktop.ClickToFocus, "ClickToFocus should be true by default")
+
+	// TerminalBundleID should be empty (auto-detect)
+	assert.Empty(t, cfg.Notifications.Desktop.TerminalBundleID, "TerminalBundleID should be empty for auto-detect")
+}
+
+func TestLoadConfig_ClickToFocus(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	// Test explicit clickToFocus: false
+	configJSON := `{
+		"notifications": {
+			"desktop": {
+				"enabled": true,
+				"sound": true,
+				"clickToFocus": false,
+				"terminalBundleId": "com.custom.terminal"
+			}
+		}
+	}`
+
+	err := os.WriteFile(configPath, []byte(configJSON), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	assert.False(t, cfg.Notifications.Desktop.ClickToFocus, "ClickToFocus should be false when explicitly set")
+	assert.Equal(t, "com.custom.terminal", cfg.Notifications.Desktop.TerminalBundleID)
+}
+
+func TestLoadConfig_ClickToFocus_DefaultWhenNotSpecified(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	// Config without clickToFocus field - should inherit from DefaultConfig
+	configJSON := `{
+		"notifications": {
+			"desktop": {
+				"enabled": true,
+				"sound": true
+			}
+		}
+	}`
+
+	err := os.WriteFile(configPath, []byte(configJSON), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// Should inherit default value (true) since we unmarshal into DefaultConfig()
+	assert.True(t, cfg.Notifications.Desktop.ClickToFocus, "ClickToFocus should default to true")
+}
+
+func TestLoadConfig_TerminalBundleID_Variations(t *testing.T) {
+	tests := []struct {
+		name             string
+		bundleID         string
+		expectedBundleID string
+	}{
+		{"iTerm2", "com.googlecode.iterm2", "com.googlecode.iterm2"},
+		{"Warp", "dev.warp.Warp-Stable", "dev.warp.Warp-Stable"},
+		{"Terminal.app", "com.apple.Terminal", "com.apple.Terminal"},
+		{"Kitty", "net.kovidgoyal.kitty", "net.kovidgoyal.kitty"},
+		{"Empty (auto-detect)", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.json")
+
+			configJSON := `{
+				"notifications": {
+					"desktop": {
+						"terminalBundleId": "` + tt.bundleID + `"
+					}
+				}
+			}`
+
+			err := os.WriteFile(configPath, []byte(configJSON), 0644)
+			require.NoError(t, err)
+
+			cfg, err := Load(configPath)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBundleID, cfg.Notifications.Desktop.TerminalBundleID)
+		})
+	}
+}
+
+func TestApplyDefaults_ClickToFocus(t *testing.T) {
+	// When loading a config without clickToFocus, ApplyDefaults shouldn't change it
+	// because bool defaults to false and we can't distinguish "not set" from "set to false"
+	// The solution is to use DefaultConfig() as base for Unmarshal
+
+	cfg := &Config{
+		Notifications: NotificationsConfig{
+			Desktop: DesktopConfig{
+				Enabled:      true,
+				Sound:        true,
+				Volume:       0.5,
+				ClickToFocus: false, // Explicitly set to false
+			},
+		},
+	}
+
+	cfg.ApplyDefaults()
+
+	// ClickToFocus should remain false (user explicitly set it)
+	assert.False(t, cfg.Notifications.Desktop.ClickToFocus)
+
+	// Volume should be preserved
+	assert.Equal(t, 0.5, cfg.Notifications.Desktop.Volume)
 }

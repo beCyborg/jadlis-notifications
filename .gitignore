@@ -18,6 +18,12 @@ bin/test-build
 bin/sound-preview
 bin/.checksums.txt
 
+# macOS terminal-notifier (downloaded by install.sh for click-to-focus)
+bin/terminal-notifier.app/
+
+# macOS ClaudeNotifications.app (created by install.sh for notification icon)
+bin/ClaudeNotifications.app/
+
 # Root binary (should be in bin/ instead)
 /claude-notifications
 
@@ -54,3 +60,11 @@ notification-debug.log
 # Build artifacts (temporary directory for builds)
 dist/
 build/
+.clinerules/byterover-rules.md
+.kilocode/rules/byterover-rules.md
+.roo/rules/byterover-rules.md
+.windsurf/rules/byterover-rules.md
+.cursor/rules/byterover-rules.mdc
+.kiro/steering/byterover-rules.md
+.qoder/rules/byterover-rules.md
+.augment/rules/byterover-rules.md
