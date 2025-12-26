@@ -110,3 +110,46 @@ func (m *Manager) CleanupForSession(sessionID string) error {
 	}
 	return nil
 }
+
+// AcquireContentLock acquires a lock for content-based deduplication
+// Uses a separate lock file with longer TTL (5s) to prevent race conditions
+// between different hook types (Stop, Notification) with same content
+func (m *Manager) AcquireContentLock(sessionID string) (bool, error) {
+	lockPath := filepath.Join(m.tempDir, fmt.Sprintf("claude-notification-%s-content.lock", sessionID))
+
+	// Try to create lock atomically
+	created, err := platform.AtomicCreateFile(lockPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to create content lock file: %w", err)
+	}
+
+	if created {
+		return true, nil
+	}
+
+	// Lock exists - check if it's stale (5s TTL for content lock)
+	age := platform.FileAge(lockPath)
+	if age >= 0 && age < 5 {
+		// Lock is fresh - wait a bit and try again
+		// This gives the first process time to complete
+		return false, nil
+	}
+
+	// Lock is stale - try to replace it
+	_ = os.Remove(lockPath)
+	created, err = platform.AtomicCreateFile(lockPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to create content lock file after cleanup: %w", err)
+	}
+
+	return created, nil
+}
+
+// ReleaseContentLock releases the content-based deduplication lock
+func (m *Manager) ReleaseContentLock(sessionID string) error {
+	lockPath := filepath.Join(m.tempDir, fmt.Sprintf("claude-notification-%s-content.lock", sessionID))
+	if platform.FileExists(lockPath) {
+		return os.Remove(lockPath)
+	}
+	return nil
+}

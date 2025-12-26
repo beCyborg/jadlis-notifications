@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2025-12-26
+
+### Fixed
+- **Race condition in content-based deduplication** 🔒
+  - Stop and Notification hooks were running simultaneously, both passing duplicate check
+  - Added shared content lock to serialize duplicate check and state update
+  - Now only one hook can check and save notification state at a time
+  - Prevents duplicate notifications when different hooks fire near-simultaneously
+
 ## [1.6.1] - 2025-12-26
 
 ### Fixed

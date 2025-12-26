@@ -236,18 +236,52 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 	// Generate message
 	message := h.generateMessage(&hookData, status)
 
-	// Check for duplicate message content (3 minutes = 180 seconds window)
-	isDuplicate, err := h.stateMgr.IsDuplicateMessage(hookData.SessionID, message, 180)
+	// Acquire content lock to prevent race between different hooks (Stop vs Notification)
+	// This ensures only one process can check and update duplicate state at a time
+	contentLockAcquired, err := h.dedupMgr.AcquireContentLock(hookData.SessionID)
 	if err != nil {
-		logging.Warn("Failed to check duplicate message: %v", err)
-	} else if isDuplicate {
-		logging.Debug("Duplicate message content detected within 3 minutes, skipping")
-		return nil
+		logging.Warn("Failed to acquire content lock: %v", err)
+		// Continue anyway - better to risk duplicate than miss notification
 	}
 
-	// Update last notification time and message AFTER duplicate check (inside lock region)
-	if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status, message); err != nil {
-		logging.Warn("Failed to update last notification: %v", err)
+	// Check for duplicate message content (3 minutes = 180 seconds window)
+	isDuplicate := false
+	if contentLockAcquired {
+		isDuplicate, err = h.stateMgr.IsDuplicateMessage(hookData.SessionID, message, 180)
+		if err != nil {
+			logging.Warn("Failed to check duplicate message: %v", err)
+		} else if isDuplicate {
+			logging.Debug("Duplicate message content detected within 3 minutes, skipping")
+			// Release content lock before returning
+			if err := h.dedupMgr.ReleaseContentLock(hookData.SessionID); err != nil {
+				logging.Warn("Failed to release content lock: %v", err)
+			}
+			return nil
+		}
+
+		// Update last notification time and message INSIDE content lock (prevents race)
+		if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status, message); err != nil {
+			logging.Warn("Failed to update last notification: %v", err)
+		}
+
+		// Release content lock after updating state
+		if err := h.dedupMgr.ReleaseContentLock(hookData.SessionID); err != nil {
+			logging.Warn("Failed to release content lock: %v", err)
+		}
+	} else {
+		// Fallback: check without lock (may have false negatives due to race)
+		isDuplicate, err = h.stateMgr.IsDuplicateMessage(hookData.SessionID, message, 180)
+		if err != nil {
+			logging.Warn("Failed to check duplicate message: %v", err)
+		} else if isDuplicate {
+			logging.Debug("Duplicate message content detected within 3 minutes, skipping")
+			return nil
+		}
+
+		// Update last notification time and message
+		if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status, message); err != nil {
+			logging.Warn("Failed to update last notification: %v", err)
+		}
 	}
 
 	// Send notifications
