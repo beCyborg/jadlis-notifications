@@ -495,11 +495,30 @@ func extractFirstSentence(text string) string {
 
 	var sentences []string
 	var currentStart int
+	runes := []rune(text)
 
-	for i, char := range text {
+	for i, char := range runes {
 		if char == '.' || char == '!' || char == '?' {
+			// For dots, check if this is really end of sentence:
+			// - Must be followed by space + uppercase letter, or end of string
+			// - Should not be preceded by a digit (to avoid "v1.6.0")
+			if char == '.' {
+				// Check if preceded by digit (version numbers like v1.6.0)
+				if i > 0 && runes[i-1] >= '0' && runes[i-1] <= '9' {
+					continue
+				}
+				// Check if followed by digit (decimal numbers like 1.5)
+				if i+1 < len(runes) && runes[i+1] >= '0' && runes[i+1] <= '9' {
+					continue
+				}
+				// Check if followed by letter without space (abbreviations, domains)
+				if i+1 < len(runes) && runes[i+1] != ' ' && runes[i+1] != '\n' {
+					continue
+				}
+			}
+
 			// Include punctuation in the sentence
-			sentence := strings.TrimSpace(text[currentStart : i+1])
+			sentence := strings.TrimSpace(string(runes[currentStart : i+1]))
 			if sentence != "" {
 				sentences = append(sentences, sentence)
 				currentStart = i + 1
@@ -536,7 +555,7 @@ func extractFirstSentence(text string) string {
 
 	// Return first 100 chars if no punctuation found
 	if len(text) > 100 {
-		return text[:100]
+		return string(runes[:100])
 	}
 	return text
 }

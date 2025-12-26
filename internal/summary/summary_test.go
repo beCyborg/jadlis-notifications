@@ -266,6 +266,26 @@ func TestExtractFirstSentence(t *testing.T) {
 			text:     "Done!",
 			expected: "Done!",
 		},
+		{
+			name:     "Version number should not split",
+			text:     "Бинарник v1.6.0 установлен! Теперь уведомления будут работать.",
+			expected: "Бинарник v1.6.0 установлен!",
+		},
+		{
+			name:     "Multiple version numbers",
+			text:     "Updated from v1.5.0 to v1.6.0. Release complete.",
+			expected: "Updated from v1.5.0 to v1.6.0. Release complete.",
+		},
+		{
+			name:     "Decimal numbers should not split",
+			text:     "Success rate is 99.9 percent. Great result!",
+			expected: "Success rate is 99.9 percent.",
+		},
+		{
+			name:     "IP address should not split",
+			text:     "Connected to 192.168.1.1 successfully. Server is running.",
+			expected: "Connected to 192.168.1.1 successfully.",
+		},
 	}
 
 	for _, tt := range tests {
