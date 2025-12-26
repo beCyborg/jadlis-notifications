@@ -188,7 +188,7 @@ func TestManager_UpdateLastNotification_NewState(t *testing.T) {
 	sessionID := "test-notif-new"
 	defer func() { _ = mgr.Delete(sessionID) }()
 
-	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusPlanReady)
+	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusPlanReady, "test plan message")
 	require.NoError(t, err)
 
 	// Verify state was created
@@ -199,6 +199,7 @@ func TestManager_UpdateLastNotification_NewState(t *testing.T) {
 	assert.Equal(t, sessionID, state.SessionID)
 	assert.Greater(t, state.LastNotificationTime, int64(0))
 	assert.Equal(t, string(analyzer.StatusPlanReady), state.LastNotificationStatus)
+	assert.Equal(t, "test plan message", state.LastNotificationMessage)
 }
 
 func TestManager_UpdateLastNotification_ExistingState(t *testing.T) {
@@ -215,7 +216,7 @@ func TestManager_UpdateLastNotification_ExistingState(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update last notification
-	err = mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete)
+	err = mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "task complete message")
 	require.NoError(t, err)
 
 	// Verify state was updated
@@ -225,6 +226,7 @@ func TestManager_UpdateLastNotification_ExistingState(t *testing.T) {
 
 	assert.Greater(t, state.LastNotificationTime, int64(0))
 	assert.Equal(t, string(analyzer.StatusTaskComplete), state.LastNotificationStatus)
+	assert.Equal(t, "task complete message", state.LastNotificationMessage)
 	// Existing fields should be preserved
 	assert.Equal(t, "ExitPlanMode", state.LastInteractiveTool)
 }
@@ -506,7 +508,7 @@ func TestManager_FullWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Update notification
-	err = mgr.UpdateLastNotification(sessionID, analyzer.StatusPlanReady)
+	err = mgr.UpdateLastNotification(sessionID, analyzer.StatusPlanReady, "plan ready message")
 	require.NoError(t, err)
 
 	// 3. Question should be suppressed within cooldown
@@ -519,7 +521,7 @@ func TestManager_FullWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// 5. Update last notification
-	err = mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete)
+	err = mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "task complete")
 	require.NoError(t, err)
 
 	// 6. Verify state contains all expected fields
@@ -599,4 +601,108 @@ func TestDelete_PermissionDenied(t *testing.T) {
 
 	// Restore permissions for cleanup
 	_ = os.Chmod(testTempDir, 0755)
+}
+
+// === IsDuplicateMessage Tests ===
+
+func TestManager_IsDuplicateMessage_NoState(t *testing.T) {
+	mgr := NewManager()
+
+	isDuplicate, err := mgr.IsDuplicateMessage("non-existent", "test message", 180)
+	require.NoError(t, err)
+	assert.False(t, isDuplicate, "should not be duplicate when no state exists")
+}
+
+func TestManager_IsDuplicateMessage_SameMessage(t *testing.T) {
+	mgr := NewManager()
+	sessionID := "test-duplicate-same"
+	defer func() { _ = mgr.Delete(sessionID) }()
+
+	// Save initial notification
+	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "Готово! Все тесты проходят.")
+	require.NoError(t, err)
+
+	// Same message should be detected as duplicate
+	isDuplicate, err := mgr.IsDuplicateMessage(sessionID, "Готово! Все тесты проходят.", 180)
+	require.NoError(t, err)
+	assert.True(t, isDuplicate, "identical message should be duplicate")
+}
+
+func TestManager_IsDuplicateMessage_NormalizedDots(t *testing.T) {
+	mgr := NewManager()
+	sessionID := "test-duplicate-dots"
+	defer func() { _ = mgr.Delete(sessionID) }()
+
+	// Save notification with double dots
+	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "Готово! Все тесты проходят..")
+	require.NoError(t, err)
+
+	// Same message with single dot should be detected as duplicate (normalization)
+	isDuplicate, err := mgr.IsDuplicateMessage(sessionID, "Готово! Все тесты проходят.", 180)
+	require.NoError(t, err)
+	assert.True(t, isDuplicate, "message with different trailing dots should be duplicate")
+}
+
+func TestManager_IsDuplicateMessage_NormalizedCase(t *testing.T) {
+	mgr := NewManager()
+	sessionID := "test-duplicate-case"
+	defer func() { _ = mgr.Delete(sessionID) }()
+
+	// Save notification
+	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "Task Complete!")
+	require.NoError(t, err)
+
+	// Same message with different case should be detected as duplicate
+	isDuplicate, err := mgr.IsDuplicateMessage(sessionID, "TASK COMPLETE!", 180)
+	require.NoError(t, err)
+	assert.True(t, isDuplicate, "message with different case should be duplicate")
+}
+
+func TestManager_IsDuplicateMessage_DifferentMessage(t *testing.T) {
+	mgr := NewManager()
+	sessionID := "test-duplicate-diff"
+	defer func() { _ = mgr.Delete(sessionID) }()
+
+	// Save initial notification
+	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "First message")
+	require.NoError(t, err)
+
+	// Different message should not be duplicate
+	isDuplicate, err := mgr.IsDuplicateMessage(sessionID, "Second message", 180)
+	require.NoError(t, err)
+	assert.False(t, isDuplicate, "different message should not be duplicate")
+}
+
+func TestManager_IsDuplicateMessage_ZeroWindow(t *testing.T) {
+	mgr := NewManager()
+	sessionID := "test-duplicate-zero"
+	defer func() { _ = mgr.Delete(sessionID) }()
+
+	// Save initial notification
+	err := mgr.UpdateLastNotification(sessionID, analyzer.StatusTaskComplete, "test message")
+	require.NoError(t, err)
+
+	// Zero window should always return false
+	isDuplicate, err := mgr.IsDuplicateMessage(sessionID, "test message", 0)
+	require.NoError(t, err)
+	assert.False(t, isDuplicate, "zero window should disable duplicate check")
+}
+
+func TestManager_IsDuplicateMessage_EmptyLastMessage(t *testing.T) {
+	mgr := NewManager()
+	sessionID := "test-duplicate-empty"
+	defer func() { _ = mgr.Delete(sessionID) }()
+
+	// Create state with empty message
+	state := &SessionState{
+		SessionID:            sessionID,
+		LastNotificationTime: 1000000000, // Set a time
+	}
+	err := mgr.Save(state)
+	require.NoError(t, err)
+
+	// Should not be duplicate when last message is empty
+	isDuplicate, err := mgr.IsDuplicateMessage(sessionID, "new message", 180)
+	require.NoError(t, err)
+	assert.False(t, isDuplicate, "should not be duplicate when last message is empty")
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/777genius/claude-notifications/internal/analyzer"
@@ -232,13 +233,22 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 		}
 	}
 
-	// Update last notification time AFTER cooldown checks (inside lock region)
-	if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status); err != nil {
-		logging.Warn("Failed to update last notification time: %v", err)
-	}
-
 	// Generate message
 	message := h.generateMessage(&hookData, status)
+
+	// Check for duplicate message content (3 minutes = 180 seconds window)
+	isDuplicate, err := h.stateMgr.IsDuplicateMessage(hookData.SessionID, message, 180)
+	if err != nil {
+		logging.Warn("Failed to check duplicate message: %v", err)
+	} else if isDuplicate {
+		logging.Debug("Duplicate message content detected within 3 minutes, skipping")
+		return nil
+	}
+
+	// Update last notification time and message AFTER duplicate check (inside lock region)
+	if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status, message); err != nil {
+		logging.Warn("Failed to update last notification: %v", err)
+	}
 
 	// Send notifications
 	h.sendNotifications(status, message, hookData.SessionID, hookData.CWD)
@@ -313,19 +323,20 @@ func (h *Handler) sendNotifications(status analyzer.Status, message, sessionID, 
 	// Add panic recovery to prevent notification failures from crashing the plugin
 	defer errorhandler.HandlePanic()
 
-	// Add session name and git branch to message
+	// Add session name, git branch and folder name to message
 	sessionName := sessionname.GenerateSessionName(sessionID)
 	gitBranch := platform.GetGitBranch(cwd)
+	folderName := filepath.Base(cwd)
 
-	// Format: "[session-name|branch] message" or "[session-name] message"
+	// Format: "[session-name|branch folder] message" or "[session-name folder] message"
 	var enhancedMessage string
 	if gitBranch != "" {
-		enhancedMessage = fmt.Sprintf("[%s|%s] %s", sessionName, gitBranch, message)
+		enhancedMessage = fmt.Sprintf("[%s|%s %s] %s", sessionName, gitBranch, folderName, message)
 	} else {
-		enhancedMessage = fmt.Sprintf("[%s] %s", sessionName, message)
+		enhancedMessage = fmt.Sprintf("[%s %s] %s", sessionName, folderName, message)
 	}
 
-	logging.Debug("Session name: %s, git branch: %s", sessionName, gitBranch)
+	logging.Debug("Session name: %s, git branch: %s, folder: %s", sessionName, gitBranch, folderName)
 
 	// Send desktop notification
 	if h.cfg.IsDesktopEnabled() {

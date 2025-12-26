@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/777genius/claude-notifications/internal/analyzer"
 	"github.com/777genius/claude-notifications/internal/platform"
@@ -12,13 +13,14 @@ import (
 
 // SessionState represents per-session state
 type SessionState struct {
-	SessionID              string `json:"session_id"`
-	LastInteractiveTool    string `json:"last_interactive_tool"`
-	LastTimestamp          int64  `json:"last_ts"`
-	LastTaskCompleteTime   int64  `json:"last_task_complete_ts,omitempty"`
-	LastNotificationTime   int64  `json:"last_notification_ts,omitempty"`
-	LastNotificationStatus string `json:"last_notification_status,omitempty"`
-	CWD                    string `json:"cwd"`
+	SessionID               string `json:"session_id"`
+	LastInteractiveTool     string `json:"last_interactive_tool"`
+	LastTimestamp           int64  `json:"last_ts"`
+	LastTaskCompleteTime    int64  `json:"last_task_complete_ts,omitempty"`
+	LastNotificationTime    int64  `json:"last_notification_ts,omitempty"`
+	LastNotificationStatus  string `json:"last_notification_status,omitempty"`
+	LastNotificationMessage string `json:"last_notification_message,omitempty"`
+	CWD                     string `json:"cwd"`
 }
 
 // Manager manages session state
@@ -168,8 +170,8 @@ func (m *Manager) Cleanup(maxAge int64) error {
 	return platform.CleanupOldFiles(m.tempDir, "claude-session-state-*.json", maxAge)
 }
 
-// UpdateLastNotification updates the last notification timestamp and status
-func (m *Manager) UpdateLastNotification(sessionID string, status analyzer.Status) error {
+// UpdateLastNotification updates the last notification timestamp, status, and message
+func (m *Manager) UpdateLastNotification(sessionID string, status analyzer.Status, message string) error {
 	state, err := m.Load(sessionID)
 	if err != nil {
 		return err
@@ -183,6 +185,7 @@ func (m *Manager) UpdateLastNotification(sessionID string, status analyzer.Statu
 
 	state.LastNotificationTime = platform.CurrentTimestamp()
 	state.LastNotificationStatus = string(status)
+	state.LastNotificationMessage = message
 
 	return m.Save(state)
 }
@@ -213,4 +216,41 @@ func (m *Manager) ShouldSuppressQuestionAfterAnyNotification(sessionID string, c
 	// and rely on the caller to log the result
 
 	return shouldSuppress, nil
+}
+
+// normalizeMessage normalizes a message for comparison by:
+// - Trimming whitespace
+// - Removing trailing dots
+// - Converting to lowercase
+func normalizeMessage(msg string) string {
+	msg = strings.TrimSpace(msg)
+	msg = strings.TrimRight(msg, ".")
+	return strings.ToLower(msg)
+}
+
+// IsDuplicateMessage checks if the given message is a duplicate of a recent notification
+// within the specified time window (in seconds)
+func (m *Manager) IsDuplicateMessage(sessionID string, message string, windowSeconds int) (bool, error) {
+	if windowSeconds <= 0 {
+		return false, nil
+	}
+
+	state, err := m.Load(sessionID)
+	if err != nil {
+		return false, err
+	}
+
+	if state == nil || state.LastNotificationTime == 0 || state.LastNotificationMessage == "" {
+		return false, nil
+	}
+
+	// Check if we're within the time window
+	now := platform.CurrentTimestamp()
+	elapsed := now - state.LastNotificationTime
+	if elapsed > int64(windowSeconds) {
+		return false, nil
+	}
+
+	// Compare normalized messages
+	return normalizeMessage(message) == normalizeMessage(state.LastNotificationMessage), nil
 }

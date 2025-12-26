@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-12-26
+
+### Added
+- **Folder name in notification titles** 📁
+  - Notification titles now show the project folder name
+  - Format: `✅ Completed [session-name] main my-project`
+  - Helps identify which project the notification is from
+
+- **Content-based duplicate detection** 🔇
+  - Prevents duplicate notifications with similar text within 3 minutes
+  - Normalizes messages (ignores trailing dots, case differences)
+  - Example: "Completed" and "Question" with same text won't both show
+  - Fixes issue where different hooks sent near-identical notifications
+
 ## [1.5.0] - 2025-12-25
 
 ### Added
