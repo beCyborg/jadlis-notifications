@@ -854,7 +854,12 @@ test_real_full_install() {
     exit_code=$?
 
     assert_exit_code 0 $exit_code "Install completed successfully"
-    assert_file_exists "$TEST_DIR/claude-notifications" "Symlink created"
+    # On Windows, wrapper is .bat file; on Unix it's a symlink
+    if is_windows; then
+        assert_file_exists "$TEST_DIR/claude-notifications.bat" "Wrapper created"
+    else
+        assert_file_exists "$TEST_DIR/claude-notifications" "Symlink created"
+    fi
 
     cleanup_test_dir
 }
