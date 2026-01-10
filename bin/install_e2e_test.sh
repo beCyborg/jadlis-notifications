@@ -876,8 +876,16 @@ test_real_binary_runs() {
 
     INSTALL_TARGET_DIR="$TEST_DIR" bash "$INSTALL_SCRIPT" 2>&1 || true
 
-    if [ -x "$TEST_DIR/claude-notifications" ]; then
-        version_output=$("$TEST_DIR/claude-notifications" --version 2>&1 || true)
+    # Determine correct binary/wrapper path
+    local binary_path
+    if is_windows; then
+        binary_path="$TEST_DIR/claude-notifications.bat"
+    else
+        binary_path="$TEST_DIR/claude-notifications"
+    fi
+
+    if [ -f "$binary_path" ]; then
+        version_output=$("$binary_path" --version 2>&1 || true)
         assert_contains "$version_output" "claude-notifications" "Binary outputs version"
     else
         echo -e "  ${RED}✗${NC} Binary not found or not executable"
@@ -900,8 +908,14 @@ test_real_utilities_installed() {
 
     INSTALL_TARGET_DIR="$TEST_DIR" bash "$INSTALL_SCRIPT" 2>&1 || true
 
-    assert_file_exists "$TEST_DIR/sound-preview" "sound-preview installed"
-    assert_file_exists "$TEST_DIR/list-devices" "list-devices installed"
+    # On Windows, utilities use .bat wrappers
+    if is_windows; then
+        assert_file_exists "$TEST_DIR/sound-preview.bat" "sound-preview installed"
+        assert_file_exists "$TEST_DIR/list-devices.bat" "list-devices installed"
+    else
+        assert_file_exists "$TEST_DIR/sound-preview" "sound-preview installed"
+        assert_file_exists "$TEST_DIR/list-devices" "list-devices installed"
+    fi
 
     cleanup_test_dir
 }
