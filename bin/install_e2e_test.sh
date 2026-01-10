@@ -83,9 +83,26 @@ start_mock_server() {
     # Create fixtures directory
     mkdir -p "$FIXTURES_DIR"
 
-    # Create mock binary (2MB)
+    # Create mock binary - a real executable shell script padded to 2MB
+    # This mimics the real binary for verify_executable checks
     if [ ! -f "$FIXTURES_DIR/mock_binary" ]; then
-        dd if=/dev/zero of="$FIXTURES_DIR/mock_binary" bs=1024 count=2048 2>/dev/null
+        cat > "$FIXTURES_DIR/mock_binary" << 'MOCK_EOF'
+#!/bin/bash
+# Mock claude-notifications binary for testing
+if [ "$1" = "--version" ] || [ "$1" = "version" ]; then
+    echo "claude-notifications version 1.0.0-mock (test binary)"
+    exit 0
+fi
+if [ "$1" = "help" ] || [ "$1" = "--help" ]; then
+    echo "claude-notifications mock binary"
+    exit 0
+fi
+echo "Mock binary executed with args: $@"
+exit 0
+MOCK_EOF
+        chmod +x "$FIXTURES_DIR/mock_binary"
+        # Pad to 2MB to pass size check (append nulls)
+        dd if=/dev/zero bs=1024 count=2000 >> "$FIXTURES_DIR/mock_binary" 2>/dev/null
     fi
 
     # Create valid checksums.txt
@@ -573,10 +590,12 @@ test_mock_download_success() {
     fi
     echo "$checksum  $binary_name" > "$FIXTURES_DIR/checksums.txt"
 
+    # On macOS, also override NOTIFIER_URL to use mock server's valid.zip
     output=$(RELEASE_URL="http://localhost:$MOCK_PORT" \
              CHECKSUMS_URL="http://localhost:$MOCK_PORT/checksums.txt" \
+             NOTIFIER_URL="http://localhost:$MOCK_PORT/valid.zip" \
              INSTALL_TARGET_DIR="$TEST_DIR" \
-             timeout 30 bash "$INSTALL_SCRIPT" 2>&1)
+             timeout 60 bash "$INSTALL_SCRIPT" 2>&1)
     exit_code=$?
 
     assert_exit_code 0 $exit_code "Install completed successfully"

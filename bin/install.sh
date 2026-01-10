@@ -227,14 +227,35 @@ get_file_size() {
 }
 
 # Check if GitHub is accessible
+# Returns 0 if accessible, 1 if not (but may set OFFLINE_MODE=true if binary exists)
 check_github_availability() {
+    OFFLINE_MODE=false
+
     if command -v curl &> /dev/null; then
-        if ! curl -s --max-time 5 -I https://github.com &> /dev/null; then
+        if ! curl -s --max-time 10 -I https://github.com &> /dev/null; then
+            # Network unavailable - check if we can use existing binary
+            if [ -f "$BINARY_PATH" ]; then
+                echo -e "${YELLOW}⚠ Cannot reach GitHub, but existing binary found${NC}"
+                echo -e "${YELLOW}  Using offline mode with existing installation${NC}"
+                OFFLINE_MODE=true
+                return 0  # Don't fail - use existing
+            fi
+
             echo -e "${RED}✗ Cannot reach GitHub${NC}" >&2
             echo -e "${YELLOW}Possible issues:${NC}" >&2
             echo -e "  - No internet connection" >&2
             echo -e "  - GitHub is down" >&2
             echo -e "  - Firewall/proxy blocking access" >&2
+            echo ""
+            echo -e "${YELLOW}Diagnostics:${NC}" >&2
+            # Try to diagnose the issue
+            if ! ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
+                echo -e "  - No network connectivity (ping failed)" >&2
+            elif ! ping -c 1 -W 2 github.com &>/dev/null; then
+                echo -e "  - DNS resolution may be failing" >&2
+            else
+                echo -e "  - GitHub may be blocked by firewall/proxy" >&2
+            fi
             return 1
         fi
     fi
@@ -305,12 +326,12 @@ download_utilities() {
     echo ""
     echo -e "${BLUE}📦 Downloading utility binaries...${NC}"
 
-    download_utility "$SOUND_PREVIEW_NAME" "$SOUND_PREVIEW_PATH"
-    download_utility "$LIST_DEVICES_NAME" "$LIST_DEVICES_PATH"
+    download_utility "$SOUND_PREVIEW_NAME" "$SOUND_PREVIEW_PATH" || true
+    download_utility "$LIST_DEVICES_NAME" "$LIST_DEVICES_PATH" || true
 
-    # Create symlinks for utilities
-    create_utility_symlink "sound-preview" "$SOUND_PREVIEW_NAME" "$SOUND_PREVIEW_PATH"
-    create_utility_symlink "list-devices" "$LIST_DEVICES_NAME" "$LIST_DEVICES_PATH"
+    # Create symlinks for utilities (may fail if downloads failed - that's OK)
+    create_utility_symlink "sound-preview" "$SOUND_PREVIEW_NAME" "$SOUND_PREVIEW_PATH" || true
+    create_utility_symlink "list-devices" "$LIST_DEVICES_NAME" "$LIST_DEVICES_PATH" || true
 }
 
 # Create symlink for a utility binary
@@ -372,6 +393,7 @@ download_checksums() {
 # Download binary with progress bar
 download_binary() {
     local url="${RELEASE_URL}/${BINARY_NAME}"
+    local error_log="${TMPDIR:-/tmp}/install-error-$$.log"
 
     echo -e "${BLUE}📦 Downloading ${BOLD}${BINARY_NAME}${NC}${BLUE}...${NC}"
     echo -e "${BLUE}   From: ${url}${NC}"
@@ -379,49 +401,74 @@ download_binary() {
 
     # Try curl first (with progress bar)
     if command -v curl &> /dev/null; then
-        # Capture HTTP status
-        local http_code=$(curl -w "%{http_code}" -fL --progress-bar "$url" -o "$BINARY_PATH" 2>&1 | tail -1)
+        # Download with detailed error capture
+        local http_code
+        http_code=$(curl -w "%{http_code}" -fL --progress-bar --max-time $CURL_TIMEOUT \
+            "$url" -o "$BINARY_PATH" 2>"$error_log") || true
 
         if [ -f "$BINARY_PATH" ] && [ "$(get_file_size "$BINARY_PATH")" -gt 100000 ]; then
+            rm -f "$error_log"
             echo ""
             return 0
-        else
-            # Analyze failure
-            rm -f "$BINARY_PATH"
-
-            if echo "$http_code" | grep -q "404"; then
-                echo ""
-                echo -e "${RED}✗ Binary not found (404)${NC}" >&2
-                echo ""
-                echo -e "${YELLOW}This usually means the release is still building.${NC}" >&2
-                echo -e "${YELLOW}Check build status at:${NC}" >&2
-                echo -e "  https://github.com/${REPO}/actions" >&2
-                echo ""
-                echo -e "${YELLOW}Wait a few minutes and try again.${NC}" >&2
-            elif echo "$http_code" | grep -qE "^5[0-9]{2}"; then
-                echo ""
-                echo -e "${RED}✗ GitHub server error (${http_code})${NC}" >&2
-                echo -e "${YELLOW}GitHub may be experiencing issues. Try again later.${NC}" >&2
-            else
-                echo ""
-                echo -e "${RED}✗ Download failed${NC}" >&2
-                echo -e "${YELLOW}Check your internet connection and try again.${NC}" >&2
-            fi
-            return 1
         fi
+
+        # Analyze failure
+        rm -f "$BINARY_PATH"
+        local curl_error=$(cat "$error_log" 2>/dev/null)
+        rm -f "$error_log"
+
+        echo ""
+        if [ "$http_code" = "404" ]; then
+            echo -e "${RED}✗ Binary not found (404)${NC}" >&2
+            echo ""
+            echo -e "${YELLOW}This usually means the release is still building.${NC}" >&2
+            echo -e "${YELLOW}Check build status at:${NC}" >&2
+            echo -e "  https://github.com/${REPO}/actions" >&2
+            echo ""
+            echo -e "${YELLOW}Wait a few minutes and try again.${NC}" >&2
+        elif echo "$http_code" | grep -qE "^5[0-9]{2}"; then
+            echo -e "${RED}✗ GitHub server error (${http_code})${NC}" >&2
+            echo -e "${YELLOW}GitHub may be experiencing issues. Try again later.${NC}" >&2
+        elif [ -n "$curl_error" ]; then
+            echo -e "${RED}✗ Download failed${NC}" >&2
+            echo -e "${YELLOW}Error details:${NC}" >&2
+            # Show relevant error info (filter out progress bar noise)
+            echo "$curl_error" | grep -iE "error|fail|refused|timeout|resolve|ssl|certificate|connect" | head -3 >&2
+            if echo "$curl_error" | grep -qi "resolve"; then
+                echo -e "${YELLOW}→ DNS resolution failed. Check your internet connection.${NC}" >&2
+            elif echo "$curl_error" | grep -qi "ssl\|certificate"; then
+                echo -e "${YELLOW}→ SSL/TLS error. Your system certificates may be outdated.${NC}" >&2
+            elif echo "$curl_error" | grep -qi "timeout"; then
+                echo -e "${YELLOW}→ Connection timed out. GitHub may be slow or blocked.${NC}" >&2
+            elif echo "$curl_error" | grep -qi "refused"; then
+                echo -e "${YELLOW}→ Connection refused. Check firewall/proxy settings.${NC}" >&2
+            fi
+        else
+            echo -e "${RED}✗ Download failed (HTTP ${http_code})${NC}" >&2
+            echo -e "${YELLOW}Check your internet connection and try again.${NC}" >&2
+        fi
+        return 1
 
     # Fallback to wget
     elif command -v wget &> /dev/null; then
-        if wget --show-progress -q "$url" -O "$BINARY_PATH" 2>&1; then
+        # Capture wget errors
+        if wget --show-progress --timeout=$WGET_TIMEOUT "$url" -O "$BINARY_PATH" 2>"$error_log"; then
             if [ -f "$BINARY_PATH" ] && [ "$(get_file_size "$BINARY_PATH")" -gt 100000 ]; then
+                rm -f "$error_log"
                 echo ""
                 return 0
             fi
         fi
 
-        rm -f "$BINARY_PATH"
+        local wget_error=$(cat "$error_log" 2>/dev/null)
+        rm -f "$BINARY_PATH" "$error_log"
+
         echo ""
         echo -e "${RED}✗ Download failed${NC}" >&2
+        if [ -n "$wget_error" ]; then
+            echo -e "${YELLOW}Error details:${NC}" >&2
+            echo "$wget_error" | grep -iE "error|fail|refused|timeout|resolve|ssl|certificate|404|500" | head -3 >&2
+        fi
         return 1
 
     else
@@ -496,6 +543,39 @@ verify_binary() {
         return 1
     fi
 
+    return 0
+}
+
+# Verify binary actually executes
+verify_executable() {
+    echo -e "${BLUE}🔍 Verifying binary executes...${NC}"
+
+    # Make executable first
+    chmod +x "$BINARY_PATH" 2>/dev/null || true
+
+    # Try to run --version (should return 0 and output version info)
+    local output
+    output=$("$BINARY_PATH" --version 2>&1)
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        echo -e "${RED}✗ Binary failed to execute (exit code: ${exit_code})${NC}" >&2
+        echo -e "${RED}  Output: ${output}${NC}" >&2
+        echo -e "${YELLOW}The downloaded file may be corrupted or incompatible.${NC}" >&2
+        rm -f "$BINARY_PATH"
+        return 1
+    fi
+
+    # Verify output contains expected string
+    if ! echo "$output" | grep -qi "claude-notifications\|version"; then
+        echo -e "${RED}✗ Binary output unexpected${NC}" >&2
+        echo -e "${RED}  Output: ${output}${NC}" >&2
+        echo -e "${YELLOW}This doesn't appear to be the correct binary.${NC}" >&2
+        rm -f "$BINARY_PATH"
+        return 1
+    fi
+
+    echo -e "${GREEN}✓ Binary executes correctly${NC}"
     return 0
 }
 
@@ -768,10 +848,36 @@ main() {
         return 0
     fi
 
-    # Check GitHub availability
+    # Check GitHub availability (may set OFFLINE_MODE=true if binary exists)
     if ! check_github_availability; then
         echo ""
         exit 1
+    fi
+
+    # Handle offline mode - use existing binary without downloading
+    if [ "$OFFLINE_MODE" = true ]; then
+        echo ""
+        echo -e "${YELLOW}Running in offline mode...${NC}"
+
+        # Verify existing binary still works
+        if ! verify_executable; then
+            echo -e "${RED}✗ Existing binary is corrupted or incompatible${NC}" >&2
+            echo -e "${YELLOW}Please restore network access to download a fresh binary.${NC}" >&2
+            exit 1
+        fi
+
+        # Ensure symlink exists
+        create_symlink
+
+        echo ""
+        echo -e "${GREEN}========================================${NC}"
+        echo -e "${GREEN}✓ Offline Setup Complete${NC}"
+        echo -e "${GREEN}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}Note: Running with cached binary (no updates)${NC}"
+        echo -e "${YELLOW}Restore network access for full installation.${NC}"
+        echo ""
+        return 0
     fi
 
     # Download checksums (optional - failure is not fatal)
@@ -793,7 +899,7 @@ main() {
         exit 1
     fi
 
-    # Verify
+    # Verify size and checksum
     if ! verify_binary; then
         cleanup
         echo ""
@@ -804,7 +910,23 @@ main() {
         exit 1
     fi
 
-    # Make executable
+    # Verify binary actually executes
+    if ! verify_executable; then
+        cleanup
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED} Binary Execution Failed${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}Possible causes:${NC}"
+        echo -e "  - Wrong architecture (try on different machine)"
+        echo -e "  - Missing system libraries"
+        echo -e "  - Corrupted download"
+        echo ""
+        exit 1
+    fi
+
+    # Make executable (already done in verify_executable, but ensure)
     make_executable
 
     # Create symlink for hooks to use
