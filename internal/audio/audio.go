@@ -5,13 +5,11 @@ package audio
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/gen2brain/malgo"
 	"github.com/go-audio/aiff"
@@ -33,7 +31,7 @@ type DeviceInfo struct {
 // Player plays audio on a specific device
 type Player struct {
 	ctx        *malgo.AllocatedContext
-	deviceID   unsafe.Pointer
+	deviceID   *malgo.DeviceID // Stored copy of device ID (nil = default device)
 	deviceName string
 	volume     float64
 	mu         sync.Mutex
@@ -92,7 +90,9 @@ func NewPlayer(deviceName string, volume float64) (*Player, error) {
 		var found bool
 		for _, dev := range devices {
 			if dev.Name() == deviceName {
-				player.deviceID = dev.ID.Pointer()
+				// Copy the DeviceID to avoid dangling pointer after devices slice is freed
+				id := dev.ID
+				player.deviceID = &id
 				found = true
 				logging.Debug("Audio device found: %s", deviceName)
 				break
@@ -113,6 +113,11 @@ func NewPlayer(deviceName string, volume float64) (*Player, error) {
 func (p *Player) Play(soundPath string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// Check if player is closed
+	if p.ctx == nil {
+		return fmt.Errorf("player is closed")
+	}
 
 	// Check if file exists
 	if _, err := os.Stat(soundPath); os.IsNotExist(err) {
@@ -146,7 +151,7 @@ func (p *Player) Play(soundPath string) error {
 
 	// Set specific device if configured
 	if p.deviceID != nil {
-		deviceConfig.Playback.DeviceID = p.deviceID
+		deviceConfig.Playback.DeviceID = p.deviceID.Pointer()
 	}
 
 	// Playback state
@@ -246,8 +251,8 @@ func (p *Player) decodeAudio(soundPath string) ([]int16, uint32, int, error) {
 	}
 }
 
-func (p *Player) decodeMP3(r io.ReadSeeker) ([]int16, uint32, int, error) {
-	streamer, format, err := mp3.Decode(r.(io.ReadCloser))
+func (p *Player) decodeMP3(f *os.File) ([]int16, uint32, int, error) {
+	streamer, format, err := mp3.Decode(f)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -256,8 +261,8 @@ func (p *Player) decodeMP3(r io.ReadSeeker) ([]int16, uint32, int, error) {
 	return streamToSamples(streamer, int(format.SampleRate), format.NumChannels)
 }
 
-func (p *Player) decodeWAV(r io.ReadSeeker) ([]int16, uint32, int, error) {
-	streamer, format, err := wav.Decode(r.(io.ReadCloser))
+func (p *Player) decodeWAV(f *os.File) ([]int16, uint32, int, error) {
+	streamer, format, err := wav.Decode(f)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -266,8 +271,8 @@ func (p *Player) decodeWAV(r io.ReadSeeker) ([]int16, uint32, int, error) {
 	return streamToSamples(streamer, int(format.SampleRate), format.NumChannels)
 }
 
-func (p *Player) decodeFLAC(r io.ReadSeeker) ([]int16, uint32, int, error) {
-	streamer, format, err := flac.Decode(r.(io.ReadCloser))
+func (p *Player) decodeFLAC(f *os.File) ([]int16, uint32, int, error) {
+	streamer, format, err := flac.Decode(f)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -276,8 +281,8 @@ func (p *Player) decodeFLAC(r io.ReadSeeker) ([]int16, uint32, int, error) {
 	return streamToSamples(streamer, int(format.SampleRate), format.NumChannels)
 }
 
-func (p *Player) decodeOGG(r io.ReadSeeker) ([]int16, uint32, int, error) {
-	streamer, format, err := vorbis.Decode(r.(io.ReadCloser))
+func (p *Player) decodeOGG(f *os.File) ([]int16, uint32, int, error) {
+	streamer, format, err := vorbis.Decode(f)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -286,8 +291,8 @@ func (p *Player) decodeOGG(r io.ReadSeeker) ([]int16, uint32, int, error) {
 	return streamToSamples(streamer, int(format.SampleRate), format.NumChannels)
 }
 
-func (p *Player) decodeAIFF(r io.ReadSeeker) ([]int16, uint32, int, error) {
-	decoder := aiff.NewDecoder(r)
+func (p *Player) decodeAIFF(f *os.File) ([]int16, uint32, int, error) {
+	decoder := aiff.NewDecoder(f)
 	if !decoder.IsValidFile() {
 		return nil, 0, 0, fmt.Errorf("invalid AIFF file")
 	}

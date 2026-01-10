@@ -332,7 +332,7 @@ bin/sound-preview --help
 
 ## Architecture
 
-```
+```text
 cmd/
   claude-notifications/     # CLI entry point
   sound-preview/            # Sound preview utility

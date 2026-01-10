@@ -35,5 +35,11 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("To use a specific device, add to config.json:")
-	fmt.Println(`  "audioDevice": "DEVICE_NAME"`)
+	fmt.Println(`  {`)
+	fmt.Println(`    "notifications": {`)
+	fmt.Println(`      "desktop": {`)
+	fmt.Println(`        "audioDevice": "DEVICE_NAME"`)
+	fmt.Println(`      }`)
+	fmt.Println(`    }`)
+	fmt.Println(`  }`)
 }

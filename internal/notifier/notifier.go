@@ -25,6 +25,7 @@ type Notifier struct {
 	playerErr   error
 	mu          sync.Mutex
 	wg          sync.WaitGroup
+	closing     bool // Prevents new sounds from being enqueued after Close() is called
 }
 
 // New creates a new notifier
@@ -163,7 +164,16 @@ func (n *Notifier) sendWithBeeep(title, message, appIcon, sound string) error {
 // playSoundAsync plays sound asynchronously if enabled
 func (n *Notifier) playSoundAsync(sound string) {
 	if n.cfg.Notifications.Desktop.Sound && sound != "" {
+		// Check if notifier is closing to prevent WaitGroup race
+		n.mu.Lock()
+		if n.closing {
+			n.mu.Unlock()
+			logging.Debug("Skipping sound playback: notifier is closing")
+			return
+		}
 		n.wg.Add(1)
+		n.mu.Unlock()
+
 		// Use SafeGo to protect against panics in sound playback goroutine
 		errorhandler.SafeGo(func() {
 			defer n.wg.Done()
@@ -222,6 +232,11 @@ func (n *Notifier) playSound(soundPath string) {
 
 // Close waits for all sounds to finish playing and cleans up resources
 func (n *Notifier) Close() error {
+	// Set closing flag to prevent new sounds from being enqueued
+	n.mu.Lock()
+	n.closing = true
+	n.mu.Unlock()
+
 	// Wait for all sounds to finish
 	n.wg.Wait()
 
