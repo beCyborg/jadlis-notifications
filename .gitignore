@@ -34,6 +34,9 @@ bin/ClaudeNotifications.app/
 *.test
 *.out
 
+# E2E test fixtures (generated during tests)
+bin/test_fixtures/
+
 # Coverage
 coverage.txt
 coverage.html

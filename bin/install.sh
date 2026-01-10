@@ -33,10 +33,10 @@ RETRY_DELAY=2
 CURL_TIMEOUT=60
 WGET_TIMEOUT=60
 
-# GitHub repository
+# GitHub repository (can be overridden via env for testing)
 REPO="777genius/claude-notifications-go"
-RELEASE_URL="https://github.com/${REPO}/releases/latest/download"
-CHECKSUMS_URL="${RELEASE_URL}/checksums.txt"
+RELEASE_URL="${RELEASE_URL:-https://github.com/${REPO}/releases/latest/download}"
+CHECKSUMS_URL="${CHECKSUMS_URL:-${RELEASE_URL}/checksums.txt}"
 
 # Parse command line arguments
 FORCE_UPDATE=false
@@ -563,7 +563,7 @@ cleanup() {
 
 # Download terminal-notifier for macOS (enables click-to-focus)
 download_terminal_notifier() {
-    local NOTIFIER_URL="https://github.com/julienXX/terminal-notifier/releases/download/2.0.0/terminal-notifier-2.0.0.zip"
+    local NOTIFIER_URL="${NOTIFIER_URL:-https://github.com/julienXX/terminal-notifier/releases/download/2.0.0/terminal-notifier-2.0.0.zip}"
     local NOTIFIER_APP="${SCRIPT_DIR}/terminal-notifier.app"
     local TEMP_ZIP="${TMPDIR:-/tmp}/terminal-notifier-$$.zip"
 
@@ -759,7 +759,8 @@ main() {
         # On macOS, also check terminal-notifier and create notification app
         if [ "$PLATFORM" = "darwin" ]; then
             download_terminal_notifier
-            create_claude_notifications_app
+            # Icon app is optional - don't fail if icon not found
+            create_claude_notifications_app || true
         fi
 
         echo -e "${GREEN}✓ Setup complete${NC}"
@@ -773,8 +774,8 @@ main() {
         exit 1
     fi
 
-    # Download checksums (optional)
-    download_checksums
+    # Download checksums (optional - failure is not fatal)
+    download_checksums || true
 
     # Download
     if ! download_binary; then
@@ -815,7 +816,8 @@ main() {
     # On macOS, download terminal-notifier and create notification app
     if [ "$PLATFORM" = "darwin" ]; then
         download_terminal_notifier
-        create_claude_notifications_app
+        # Icon app is optional - don't fail if icon not found
+        create_claude_notifications_app || true
     fi
 
     # Cleanup
