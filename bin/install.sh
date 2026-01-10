@@ -248,10 +248,19 @@ check_github_availability() {
             echo -e "  - Firewall/proxy blocking access" >&2
             echo ""
             echo -e "${YELLOW}Diagnostics:${NC}" >&2
-            # Try to diagnose the issue
-            if ! ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
+            # Try to diagnose the issue (cross-platform ping)
+            local ping_ok=false
+            if [ "$PLATFORM" = "windows" ]; then
+                # Windows ping: -n count, -w timeout_ms
+                ping -n 1 -w 2000 8.8.8.8 &>/dev/null && ping_ok=true
+            else
+                # Unix ping: -c count, -W timeout (seconds on Linux, ms on macOS - 2 works for both)
+                ping -c 1 -W 2 8.8.8.8 &>/dev/null && ping_ok=true
+            fi
+
+            if [ "$ping_ok" = false ]; then
                 echo -e "  - No network connectivity (ping failed)" >&2
-            elif ! ping -c 1 -W 2 github.com &>/dev/null; then
+            elif [ "$PLATFORM" != "windows" ] && ! ping -c 1 -W 2 github.com &>/dev/null; then
                 echo -e "  - DNS resolution may be failing" >&2
             else
                 echo -e "  - GitHub may be blocked by firewall/proxy" >&2
@@ -393,7 +402,7 @@ download_checksums() {
 # Download binary with progress bar
 download_binary() {
     local url="${RELEASE_URL}/${BINARY_NAME}"
-    local error_log="${TMPDIR:-/tmp}/install-error-$$.log"
+    local error_log="${TMPDIR:-${TEMP:-/tmp}}/install-error-$$.log"
 
     echo -e "${BLUE}📦 Downloading ${BOLD}${BINARY_NAME}${NC}${BLUE}...${NC}"
     echo -e "${BLUE}   From: ${url}${NC}"
@@ -645,7 +654,7 @@ cleanup() {
 download_terminal_notifier() {
     local NOTIFIER_URL="${NOTIFIER_URL:-https://github.com/julienXX/terminal-notifier/releases/download/2.0.0/terminal-notifier-2.0.0.zip}"
     local NOTIFIER_APP="${SCRIPT_DIR}/terminal-notifier.app"
-    local TEMP_ZIP="${TMPDIR:-/tmp}/terminal-notifier-$$.zip"
+    local TEMP_ZIP="${TMPDIR:-${TEMP:-/tmp}}/terminal-notifier-$$.zip"
 
     # Check if already installed
     if [ -d "$NOTIFIER_APP" ]; then
@@ -740,7 +749,7 @@ create_claude_notifications_app() {
     mkdir -p "$APP_DIR/Contents/Resources"
 
     # Create iconset from PNG
-    local ICONSET_DIR="/tmp/claude-$$.iconset"
+    local ICONSET_DIR="${TMPDIR:-${TEMP:-/tmp}}/claude-$$.iconset"
     mkdir -p "$ICONSET_DIR"
 
     # Generate different icon sizes
