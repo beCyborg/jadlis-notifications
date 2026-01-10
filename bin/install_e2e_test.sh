@@ -445,6 +445,13 @@ test_lock_cleanup_on_exit() {
 
 test_no_write_permission() {
     echo -e "\n${CYAN}▶ test_no_write_permission${NC}"
+
+    # Skip on Windows - chmod doesn't work the same way
+    if is_windows; then
+        skip_test "No write permission" "chmod not supported on Windows"
+        return
+    fi
+
     setup_test_dir
 
     mkdir -p "$TEST_DIR/readonly"
