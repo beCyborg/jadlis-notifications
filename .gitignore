@@ -16,7 +16,9 @@ bin/claude-notifications.bat
 # Temporary build files
 bin/test-build
 bin/sound-preview
+bin/sound-preview-*
 bin/list-devices
+bin/list-devices-*
 bin/.checksums.txt
 
 # macOS terminal-notifier (downloaded by install.sh for click-to-focus)

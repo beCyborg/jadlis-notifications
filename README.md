@@ -173,7 +173,7 @@ On macOS, clicking a notification will activate your terminal window - no more h
 
 **How it works:**
 - Automatically detects your terminal (iTerm2, Warp, Terminal.app, kitty, Ghostty, WezTerm, Alacritty)
-- Uses `terminal-notifier` (auto-installed via `/notifications-init`)
+- Uses `terminal-notifier` (auto-installed via `/claude-notifications-go:notifications-init`)
 - Falls back to standard notifications if terminal-notifier is unavailable
 
 **Configuration** (in `config/config.json`):

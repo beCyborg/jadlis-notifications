@@ -72,7 +72,7 @@ func GetTerminalNotifierPath() (string, error) {
 		return path, nil
 	}
 
-	return "", fmt.Errorf("terminal-notifier not found: run /notifications-init to install")
+	return "", fmt.Errorf("terminal-notifier not found: run /claude-notifications-go:notifications-init to install")
 }
 
 // IsTerminalNotifierAvailable checks if terminal-notifier is available
@@ -83,7 +83,7 @@ func IsTerminalNotifierAvailable() bool {
 
 // EnsureClaudeNotificationsApp creates ClaudeNotifications.app if it doesn't exist.
 // This allows the notification icon to work even when users update the plugin
-// without running /notifications-init.
+// without running /claude-notifications-go:notifications-init.
 func EnsureClaudeNotificationsApp() error {
 	pluginRoot := os.Getenv("CLAUDE_PLUGIN_ROOT")
 	if pluginRoot == "" {

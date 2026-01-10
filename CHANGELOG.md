@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.7.2] - 2026-01-10
 
 ### Improved
-- **Auto-update now always works** - `/notifications-init` reliably updates binaries even from old cached plugins
+- **Auto-update now always works** - `/claude-notifications-go:notifications-init` reliably updates binaries even from old cached plugins
   - Downloads latest `install.sh` directly from GitHub before running
   - Uses `--force` flag to replace existing binaries
   - Cross-platform temp directory (`$TMPDIR`, `$TEMP`, `/tmp` fallback)
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Installer now downloads utility binaries** ([#14](https://github.com/777genius/claude-notifications-go/issues/14))
-  - `sound-preview` and `list-devices` were missing after `/notifications-init`
+  - `sound-preview` and `list-devices` were missing after `/claude-notifications-go:notifications-init`
   - Installer script now downloads all three binaries
   - Creates proper symlinks for all utilities
 
@@ -270,7 +270,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Linux ARM64 support for Raspberry Pi and other ARM64 Linux systems (#2)
   - Native ARM64 runner (`ubuntu-24.04-arm`) for reliable builds
   - Full audio and notification support via CGO
-  - Automatic binary download via `/notifications-init` command
+  - Automatic binary download via `/claude-notifications-go:notifications-init` command
 
 ### Fixed
 - Webhook configuration validation now only runs when webhooks are enabled (#1)
