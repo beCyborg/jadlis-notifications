@@ -12,13 +12,29 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get target directory
+# Priority: 1) INSTALL_TARGET_DIR env var (set by notifications-init.md)
+#           2) Script's own directory (normal case)
+if [ -n "$INSTALL_TARGET_DIR" ]; then
+    SCRIPT_DIR="$INSTALL_TARGET_DIR"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
 # GitHub repository
 REPO="777genius/claude-notifications-go"
 RELEASE_URL="https://github.com/${REPO}/releases/latest/download"
 CHECKSUMS_URL="${RELEASE_URL}/checksums.txt"
+
+# Parse command line arguments
+FORCE_UPDATE=false
+for arg in "$@"; do
+  case $arg in
+    --force|-f)
+      FORCE_UPDATE=true
+      ;;
+  esac
+done
 
 # Detect platform and architecture
 detect_platform() {
@@ -106,6 +122,14 @@ check_github_availability() {
 
 # Check if binary already exists
 check_existing() {
+    if [ "$FORCE_UPDATE" = true ]; then
+        echo -e "${BLUE}🔄 Force update requested, removing old binaries...${NC}"
+        rm -f "$BINARY_PATH" "$SOUND_PREVIEW_PATH" "$LIST_DEVICES_PATH" 2>/dev/null
+        # Remove symlinks (Unix) and .bat wrappers (Windows)
+        rm -f "${SCRIPT_DIR}/claude-notifications" "${SCRIPT_DIR}/sound-preview" "${SCRIPT_DIR}/list-devices" 2>/dev/null
+        rm -f "${SCRIPT_DIR}/claude-notifications.bat" "${SCRIPT_DIR}/sound-preview.bat" "${SCRIPT_DIR}/list-devices.bat" 2>/dev/null
+        return 1
+    fi
     if [ -f "$BINARY_PATH" ]; then
         echo -e "${GREEN}✓${NC} Binary already installed: ${BOLD}${BINARY_NAME}${NC}"
         echo ""
