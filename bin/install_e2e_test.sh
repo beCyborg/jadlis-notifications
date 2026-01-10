@@ -71,6 +71,43 @@ cleanup_test_dir() {
     fi
 }
 
+# Get normalized platform name (matching install.sh)
+get_platform() {
+    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    case "$os" in
+        darwin) echo "darwin" ;;
+        linux) echo "linux" ;;
+        mingw*|msys*|cygwin*) echo "windows" ;;
+        *) echo "unknown" ;;
+    esac
+}
+
+# Get normalized architecture (matching install.sh)
+get_arch() {
+    local arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64) echo "amd64" ;;
+        arm64|aarch64) echo "arm64" ;;
+        *) echo "unknown" ;;
+    esac
+}
+
+# Get binary name for current platform
+get_binary_name() {
+    local platform=$(get_platform)
+    local arch=$(get_arch)
+    if [ "$platform" = "windows" ]; then
+        echo "claude-notifications-${platform}-${arch}.exe"
+    else
+        echo "claude-notifications-${platform}-${arch}"
+    fi
+}
+
+# Check if on Windows
+is_windows() {
+    [ "$(get_platform)" = "windows" ]
+}
+
 # Start mock server
 start_mock_server() {
     local port="${1:-$MOCK_PORT}"
@@ -304,23 +341,9 @@ skip_test() {
 test_platform_detection() {
     echo -e "\n${CYAN}▶ test_platform_detection${NC}"
 
-    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
+    local expected_platform=$(get_platform)
+    local expected_arch=$(get_arch)
 
-    case "$os" in
-        darwin) expected_platform="darwin" ;;
-        linux) expected_platform="linux" ;;
-        *) expected_platform="unknown" ;;
-    esac
-
-    case "$arch" in
-        x86_64|amd64) expected_arch="amd64" ;;
-        arm64|aarch64) expected_arch="arm64" ;;
-        *) expected_arch="unknown" ;;
-    esac
-
-    # Source the install script to get detect_platform function
-    # We can't easily source it, so we test indirectly via output
     setup_test_dir
 
     output=$(INSTALL_TARGET_DIR="$TEST_DIR" timeout 5 bash "$INSTALL_SCRIPT" 2>&1 || true)
@@ -479,14 +502,7 @@ test_force_removes_binaries() {
     setup_test_dir
 
     # Create fake binary files
-    local platform=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
-    case "$arch" in
-        x86_64|amd64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
-    esac
-
-    local binary_name="claude-notifications-${platform}-${arch}"
+    local binary_name=$(get_binary_name)
     touch "$TEST_DIR/$binary_name"
 
     # Run with --force and use unreachable URL so it fails fast after cleanup
@@ -570,13 +586,7 @@ test_mock_download_success() {
     start_mock_server $MOCK_PORT || { skip_test "Download success" "mock server failed"; return; }
 
     # Create platform-specific mock binary name
-    local platform=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
-    case "$arch" in
-        x86_64|amd64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
-    esac
-    local binary_name="claude-notifications-${platform}-${arch}"
+    local binary_name=$(get_binary_name)
 
     # Copy mock_binary to expected name
     cp "$FIXTURES_DIR/mock_binary" "$FIXTURES_DIR/$binary_name"
@@ -590,7 +600,7 @@ test_mock_download_success() {
     fi
     echo "$checksum  $binary_name" > "$FIXTURES_DIR/checksums.txt"
 
-    # On macOS, also override NOTIFIER_URL to use mock server's valid.zip
+    # Run install
     output=$(RELEASE_URL="http://localhost:$MOCK_PORT" \
              CHECKSUMS_URL="http://localhost:$MOCK_PORT/checksums.txt" \
              NOTIFIER_URL="http://localhost:$MOCK_PORT/valid.zip" \
@@ -600,7 +610,12 @@ test_mock_download_success() {
 
     assert_exit_code 0 $exit_code "Install completed successfully"
     assert_file_exists "$TEST_DIR/$binary_name" "Binary downloaded"
-    assert_file_exists "$TEST_DIR/claude-notifications" "Symlink created"
+    # On Windows, wrapper is .bat file; on Unix it's a symlink
+    if is_windows; then
+        assert_file_exists "$TEST_DIR/claude-notifications.bat" "Wrapper created"
+    else
+        assert_file_exists "$TEST_DIR/claude-notifications" "Symlink created"
+    fi
 
     # Cleanup mock files
     rm -f "$FIXTURES_DIR/$binary_name"
@@ -700,13 +715,7 @@ test_mock_checksum_mismatch() {
     start_mock_server $MOCK_PORT || { skip_test "Checksum mismatch" "mock server failed"; return; }
 
     # Create platform-specific mock binary
-    local platform=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
-    case "$arch" in
-        x86_64|amd64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
-    esac
-    local binary_name="claude-notifications-${platform}-${arch}"
+    local binary_name=$(get_binary_name)
 
     cp "$FIXTURES_DIR/mock_binary" "$FIXTURES_DIR/$binary_name"
 
@@ -747,13 +756,7 @@ test_mock_zip_corrupted() {
     start_mock_server $MOCK_PORT || { skip_test "Corrupted zip" "mock server failed"; return; }
 
     # First do a successful main binary download, then test terminal-notifier
-    local platform=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
-    case "$arch" in
-        x86_64|amd64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
-    esac
-    local binary_name="claude-notifications-${platform}-${arch}"
+    local binary_name=$(get_binary_name)
 
     cp "$FIXTURES_DIR/mock_binary" "$FIXTURES_DIR/$binary_name"
     local checksum
