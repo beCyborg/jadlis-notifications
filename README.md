@@ -19,6 +19,7 @@ Smart notifications for Claude Code with click-to-focus, git branch display, and
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
     - [Install from GitHub](#install-from-github)
+    - [Updating](#updating)
   - [Features](#features)
     - [🖥️ Cross-Platform Support](#️-cross-platform-support)
     - [🧠 Smart Detection](#-smart-detection)
@@ -84,6 +85,22 @@ Smart notifications for Claude Code with click-to-focus, git branch display, and
 2. `/claude-notifications-go:notifications-settings` guides you through sound configuration with an interactive wizard
 
 The binary is downloaded once and cached locally. You can re-run `/claude-notifications-go:notifications-settings` anytime to reconfigure.
+
+### Updating
+
+To update to the latest version:
+
+```bash
+# 1) Update the plugin
+/plugin update claude-notifications-go@claude-notifications-go
+
+# 2) Re-download binaries (new version)
+/claude-notifications-go:notifications-init
+
+# 3) Restart Claude Code to apply hook changes
+```
+
+Your `config.json` settings will be preserved during the update.
 
 
 ## Features
