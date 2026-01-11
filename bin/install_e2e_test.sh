@@ -1255,6 +1255,17 @@ test_hook_wrapper_uses_force_on_update() {
     fi
 }
 
+test_hook_wrapper_outputs_system_message() {
+    echo -e "\n${CYAN}▶ test_hook_wrapper_outputs_system_message${NC}"
+
+    # Verify wrapper outputs systemMessage JSON for Claude Code console
+    if grep -q 'systemMessage' "$SCRIPT_DIR/hook-wrapper.sh"; then
+        pass_test "Wrapper outputs systemMessage for console notification"
+    else
+        fail_test "Wrapper outputs systemMessage" "Missing systemMessage output"
+    fi
+}
+
 #=============================================================================
 # Category E: Hook Wrapper Tests (Mock Server)
 #=============================================================================
@@ -1537,6 +1548,7 @@ main() {
         test_hook_wrapper_version_mismatch_triggers_update
         test_hook_wrapper_version_match_no_update
         test_hook_wrapper_uses_force_on_update
+        test_hook_wrapper_outputs_system_message
     fi
 
     # Category E: Hook Wrapper Tests (Mock Server)

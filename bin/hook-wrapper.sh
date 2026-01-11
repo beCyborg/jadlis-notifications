@@ -61,12 +61,22 @@ else
     fi
 fi
 
-# Install if needed
+# Install if needed and notify user
 if [ "$NEED_INSTALL" = 1 ]; then
     if [ "$NEED_FORCE" = 1 ]; then
         run_install --force
+        # Notify about update (shown as warning in Claude Code)
+        if binary_ok; then
+            NEW_VER=$(get_binary_version)
+            printf '{"systemMessage":"[claude-notifications] Updated to v%s"}\n' "$NEW_VER"
+        fi
     else
         run_install
+        # Notify about first install
+        if binary_ok; then
+            NEW_VER=$(get_binary_version)
+            printf '{"systemMessage":"[claude-notifications] Installed v%s"}\n' "$NEW_VER"
+        fi
     fi
 fi
 
