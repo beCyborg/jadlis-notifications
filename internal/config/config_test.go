@@ -630,3 +630,224 @@ func TestApplyDefaults_ClickToFocus(t *testing.T) {
 	// Volume should be preserved
 	assert.Equal(t, 0.5, cfg.Notifications.Desktop.Volume)
 }
+
+// === Tests for Per-Status Enabled ===
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func TestIsStatusEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   string
+		enabled  *bool
+		expected bool
+	}{
+		{
+			name:     "nil means enabled (backward compatibility)",
+			status:   "task_complete",
+			enabled:  nil,
+			expected: true,
+		},
+		{
+			name:     "explicit true",
+			status:   "task_complete",
+			enabled:  boolPtr(true),
+			expected: true,
+		},
+		{
+			name:     "explicit false",
+			status:   "task_complete",
+			enabled:  boolPtr(false),
+			expected: false,
+		},
+		{
+			name:     "unknown status returns true",
+			status:   "unknown_status",
+			enabled:  nil,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+
+			// Set enabled for the status
+			if tt.status != "unknown_status" {
+				info := cfg.Statuses[tt.status]
+				info.Enabled = tt.enabled
+				cfg.Statuses[tt.status] = info
+			}
+
+			result := cfg.IsStatusEnabled(tt.status)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsStatusDesktopEnabled(t *testing.T) {
+	tests := []struct {
+		name           string
+		globalEnabled  bool
+		statusEnabled  *bool
+		expected       bool
+	}{
+		{
+			name:           "global enabled + status enabled (nil)",
+			globalEnabled:  true,
+			statusEnabled:  nil,
+			expected:       true,
+		},
+		{
+			name:           "global enabled + status explicit true",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(true),
+			expected:       true,
+		},
+		{
+			name:           "global enabled + status disabled",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(false),
+			expected:       false,
+		},
+		{
+			name:           "global disabled + status enabled",
+			globalEnabled:  false,
+			statusEnabled:  boolPtr(true),
+			expected:       false,
+		},
+		{
+			name:           "global disabled + status disabled",
+			globalEnabled:  false,
+			statusEnabled:  boolPtr(false),
+			expected:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Notifications.Desktop.Enabled = tt.globalEnabled
+
+			info := cfg.Statuses["task_complete"]
+			info.Enabled = tt.statusEnabled
+			cfg.Statuses["task_complete"] = info
+
+			result := cfg.IsStatusDesktopEnabled("task_complete")
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsStatusWebhookEnabled(t *testing.T) {
+	tests := []struct {
+		name           string
+		globalEnabled  bool
+		statusEnabled  *bool
+		expected       bool
+	}{
+		{
+			name:           "global enabled + status enabled (nil)",
+			globalEnabled:  true,
+			statusEnabled:  nil,
+			expected:       true,
+		},
+		{
+			name:           "global enabled + status disabled",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(false),
+			expected:       false,
+		},
+		{
+			name:           "global disabled + status enabled",
+			globalEnabled:  false,
+			statusEnabled:  boolPtr(true),
+			expected:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Notifications.Webhook.Enabled = tt.globalEnabled
+
+			info := cfg.Statuses["task_complete"]
+			info.Enabled = tt.statusEnabled
+			cfg.Statuses["task_complete"] = info
+
+			result := cfg.IsStatusWebhookEnabled("task_complete")
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestBackwardCompatibility_NoEnabledField(t *testing.T) {
+	// Test loading config without "enabled" field in statuses
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	// Old-style config without enabled field
+	configJSON := `{
+		"notifications": {
+			"desktop": {"enabled": true}
+		},
+		"statuses": {
+			"task_complete": {
+				"title": "Task Done",
+				"sound": "/path/to/sound.mp3"
+			}
+		}
+	}`
+
+	err := os.WriteFile(configPath, []byte(configJSON), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// All statuses should be enabled by default (backward compatibility)
+	assert.True(t, cfg.IsStatusEnabled("task_complete"))
+	assert.True(t, cfg.IsStatusEnabled("question"))
+	assert.True(t, cfg.IsStatusEnabled("plan_ready"))
+	assert.True(t, cfg.IsStatusEnabled("review_complete"))
+}
+
+func TestLoadConfig_WithStatusEnabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	// Config with enabled: false for task_complete
+	configJSON := `{
+		"notifications": {
+			"desktop": {"enabled": true}
+		},
+		"statuses": {
+			"task_complete": {
+				"enabled": false,
+				"title": "Task Done",
+				"sound": "/path/to/sound.mp3"
+			},
+			"question": {
+				"enabled": true,
+				"title": "Question",
+				"sound": "/path/to/question.mp3"
+			}
+		}
+	}`
+
+	err := os.WriteFile(configPath, []byte(configJSON), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// task_complete should be disabled
+	assert.False(t, cfg.IsStatusEnabled("task_complete"))
+	assert.False(t, cfg.IsStatusDesktopEnabled("task_complete"))
+
+	// question should be enabled
+	assert.True(t, cfg.IsStatusEnabled("question"))
+	assert.True(t, cfg.IsStatusDesktopEnabled("question"))
+}

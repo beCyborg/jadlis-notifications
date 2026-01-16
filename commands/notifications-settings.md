@@ -33,6 +33,7 @@ This setup wizard is INTERACTIVE. Users can preview sounds at ANY time by saying
 - Step 2: Detect system and list available sounds
 - Step 3: **INTERACTIVE PREVIEW PHASE** - let user explore sounds freely
 - Step 4: Ask 4 questions (Task/Review/Question/Plan) - remind about preview before each
+- Step 4.5: **Enable/Disable notification types** - let user choose which types to receive
 - Step 5: Volume configuration
 - Step 5.5: Audio device selection (optional)
 - Step 6: Webhook configuration
@@ -434,6 +435,40 @@ Use AskUserQuestion with the same dynamically generated options as Question 1.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Step 4.5: Enable/Disable Notification Types
+
+Now let's choose which notification types you want to receive. You can disable specific types that you find too frequent.
+
+Use AskUserQuestion with:
+- question: "Which notification types do you want to receive? (unselected will be disabled)"
+- header: "Types"
+- multiSelect: true
+- options:
+  1. **task_complete** - "Task completed with code changes (recommended)"
+  2. **review_complete** - "Code review/analysis completed"
+  3. **question** - "Claude has a question for you (recommended)"
+  4. **plan_ready** - "Plan is ready for review"
+
+**Note:** By default all types are selected (enabled). Unselecting a type will disable notifications for that status.
+
+**Mapping user selection to config:**
+- For each SELECTED type: `"enabled": true` (or omit, as nil = true)
+- For each UNSELECTED type: `"enabled": false`
+
+**Example:** If user only selects "question" and "plan_ready":
+```json
+{
+  "statuses": {
+    "task_complete": { "enabled": false, "title": "...", "sound": "..." },
+    "review_complete": { "enabled": false, "title": "...", "sound": "..." },
+    "question": { "enabled": true, "title": "...", "sound": "..." },
+    "plan_ready": { "enabled": true, "title": "...", "sound": "..." }
+  }
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ## Step 5: Notification Volume Configuration
 
 Now let's configure the volume for your notification sounds.
@@ -613,24 +648,24 @@ PLAN_READY_PATH=$(get_sound_path "$user_answer_4")
   },
   "statuses": {
     "task_complete": {
+      "enabled": <true if selected in Step 4.5, false if not selected>,
       "title": "✅ Task Completed",
-      "sound": "<user's choice>",
-      "keywords": ["completed", "done", "finished", "успешно", "завершен"]
+      "sound": "<user's choice>"
     },
     "review_complete": {
+      "enabled": <true if selected in Step 4.5, false if not selected>,
       "title": "🔍 Review Completed",
-      "sound": "<user's choice>",
-      "keywords": ["review", "ревью", "analyzed", "проверка", "analysis"]
+      "sound": "<user's choice>"
     },
     "question": {
+      "enabled": <true if selected in Step 4.5, false if not selected>,
       "title": "❓ Claude Has Questions",
-      "sound": "<user's choice>",
-      "keywords": ["question", "вопрос", "clarify"]
+      "sound": "<user's choice>"
     },
     "plan_ready": {
+      "enabled": <true if selected in Step 4.5, false if not selected>,
       "title": "📋 Plan Ready for Review",
-      "sound": "<user's choice>",
-      "keywords": ["plan", "план", "strategy"]
+      "sound": "<user's choice>"
     }
   }
 }
@@ -649,10 +684,10 @@ After creating the configuration, show the user:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📝 Summary:
-  ✅ Task Complete    → <chosen sound>
-  🔍 Review Complete  → <chosen sound>
-  ❓ Question         → <chosen sound>
-  📋 Plan Ready       → <chosen sound>
+  ✅ Task Complete    → <chosen sound> <ENABLED/DISABLED>
+  🔍 Review Complete  → <chosen sound> <ENABLED/DISABLED>
+  ❓ Question         → <chosen sound> <ENABLED/DISABLED>
+  📋 Plan Ready       → <chosen sound> <ENABLED/DISABLED>
 
   🔊 Desktop notifications: ENABLED
   🔊 Volume: <selected volume>%

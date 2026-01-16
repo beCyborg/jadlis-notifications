@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-01-16
+
+### Added
+- **Per-status notification control** 🎛️ ([#16](https://github.com/777genius/claude-notifications-go/issues/16))
+  - Disable individual notification types (e.g., disable only `task_complete` while keeping others)
+  - New `enabled` field in status config: `"enabled": false` to disable a specific type
+  - Backward compatible: missing `enabled` field defaults to `true`
+  - Updated `/notifications-settings` wizard with Step 4.5 for selecting notification types
+  - Example config to disable task_complete:
+    ```json
+    {
+      "statuses": {
+        "task_complete": { "enabled": false, "title": "...", "sound": "..." }
+      }
+    }
+    ```
+
+### Technical
+- Added `Enabled *bool` field to `StatusInfo` struct (pointer for nil = true default)
+- New methods: `IsStatusEnabled()`, `IsStatusDesktopEnabled()`, `IsStatusWebhookEnabled()`
+- Updated `sendNotifications()` to check per-status enabled
+- 14 new tests for per-status enabled functionality
+
 ## [1.13.0] - 2026-01-11
 
 ### Added

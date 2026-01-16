@@ -1274,3 +1274,266 @@ func TestHandleHookCallsWebhookShutdown(t *testing.T) {
 		t.Errorf("expected Shutdown timeout %v, got %v", expectedTimeout, actualTimeout)
 	}
 }
+
+// === Per-Status Enabled Tests ===
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// TestHandler_StatusDisabled_SkipsDesktopNotification verifies that when a status
+// is disabled in config, desktop notifications are not sent for that status
+func TestHandler_StatusDisabled_SkipsDesktopNotification(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				Enabled: boolPtr(false), // Disabled!
+				Title:   "Task Complete",
+			},
+			"review_complete": {
+				// Enabled: nil means enabled by default
+				Title: "Review Complete",
+			},
+		},
+	}
+
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	// Create transcript with active tools (Write/Edit) - should trigger task_complete
+	transcriptPath := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID:      "test-status-disabled-1",
+		TranscriptPath: transcriptPath,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should NOT send notification because task_complete is disabled
+	if mockNotif.wasCalled() {
+		t.Error("expected NO notification for disabled status (task_complete)")
+	}
+}
+
+// TestHandler_StatusEnabled_SendsDesktopNotification verifies that when a status
+// is explicitly enabled, desktop notifications are sent
+func TestHandler_StatusEnabled_SendsDesktopNotification(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				Enabled: boolPtr(true), // Explicitly enabled
+				Title:   "Task Complete",
+			},
+		},
+	}
+
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	transcriptPath := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID:      "test-status-enabled-1",
+		TranscriptPath: transcriptPath,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should send notification
+	if !mockNotif.wasCalled() {
+		t.Error("expected notification for enabled status (task_complete)")
+	}
+}
+
+// TestHandler_StatusDisabled_SkipsWebhookNotification verifies that when a status
+// is disabled, webhook notifications are also not sent for that status
+func TestHandler_StatusDisabled_SkipsWebhookNotification(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+			Webhook: config.WebhookConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				Enabled: boolPtr(false), // Disabled!
+				Title:   "Task Complete",
+			},
+		},
+	}
+
+	handler, mockNotif, mockWH := newTestHandler(t, cfg)
+
+	transcriptPath := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID:      "test-status-disabled-webhook-1",
+		TranscriptPath: transcriptPath,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should NOT send desktop notification
+	if mockNotif.wasCalled() {
+		t.Error("expected NO desktop notification for disabled status")
+	}
+
+	// Should NOT send webhook notification
+	if mockWH.wasCalled() {
+		t.Error("expected NO webhook notification for disabled status")
+	}
+}
+
+// TestHandler_StatusNilEnabled_SendsNotification verifies backward compatibility:
+// when enabled field is nil (not specified), notifications should be sent
+func TestHandler_StatusNilEnabled_SendsNotification(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				// Enabled: nil - not specified, should default to true
+				Title: "Task Complete",
+			},
+		},
+	}
+
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	transcriptPath := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID:      "test-status-nil-enabled-1",
+		TranscriptPath: transcriptPath,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should send notification (nil = enabled by default)
+	if !mockNotif.wasCalled() {
+		t.Error("expected notification when enabled is nil (backward compatibility)")
+	}
+}
+
+// TestHandler_PreToolUse_StatusDisabled verifies that PreToolUse hooks respect
+// per-status enabled setting
+func TestHandler_PreToolUse_StatusDisabled(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"plan_ready": {
+				Enabled: boolPtr(false), // Disabled!
+				Title:   "Plan Ready",
+			},
+		},
+	}
+
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID: "test-pretool-disabled-1",
+		ToolName:  "ExitPlanMode",
+		CWD:       "/test",
+	})
+
+	err := handler.HandleHook("PreToolUse", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should NOT send notification because plan_ready is disabled
+	if mockNotif.wasCalled() {
+		t.Error("expected NO notification for disabled status (plan_ready)")
+	}
+}
+
+// TestHandler_MixedStatusEnabled verifies that different statuses can have
+// different enabled settings
+func TestHandler_MixedStatusEnabled(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				Enabled: boolPtr(false), // Disabled
+				Title:   "Task Complete",
+			},
+			"review_complete": {
+				Enabled: boolPtr(true), // Enabled
+				Title:   "Review Complete",
+			},
+			"question": {
+				// nil - default enabled
+				Title: "Question",
+			},
+		},
+	}
+
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	// Test 1: task_complete (disabled) - should NOT notify
+	transcriptTask := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData1 := buildHookDataJSON(HookData{
+		SessionID:      "test-mixed-1",
+		TranscriptPath: transcriptTask,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData1)
+	if err != nil {
+		t.Fatalf("task_complete error: %v", err)
+	}
+
+	if mockNotif.wasCalled() {
+		t.Error("expected NO notification for disabled task_complete")
+	}
+
+	// Test 2: review_complete (enabled) - should notify
+	transcriptReview := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Read", "Grep"}, 300))
+
+	hookData2 := buildHookDataJSON(HookData{
+		SessionID:      "test-mixed-2",
+		TranscriptPath: transcriptReview,
+		CWD:            "/test",
+	})
+
+	err = handler.HandleHook("Stop", hookData2)
+	if err != nil {
+		t.Fatalf("review_complete error: %v", err)
+	}
+
+	if !mockNotif.wasCalled() {
+		t.Error("expected notification for enabled review_complete")
+	}
+}

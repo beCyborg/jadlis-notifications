@@ -73,8 +73,9 @@ type RateLimitConfig struct {
 
 // StatusInfo represents configuration for a specific status
 type StatusInfo struct {
-	Title string `json:"title"`
-	Sound string `json:"sound"`
+	Enabled *bool  `json:"enabled,omitempty"` // nil = true (default for backward compatibility)
+	Title   string `json:"title"`
+	Sound   string `json:"sound"`
 }
 
 // DefaultConfig returns a config with sensible defaults
@@ -305,4 +306,29 @@ func (c *Config) ShouldNotifyOnTextResponse() bool {
 		return true // Default: notify on text responses
 	}
 	return *c.Notifications.NotifyOnTextResponse
+}
+
+// IsStatusEnabled returns true if notifications for this status are enabled
+// Returns true by default (if Enabled is nil or not specified) for backward compatibility
+func (c *Config) IsStatusEnabled(status string) bool {
+	info, exists := c.Statuses[status]
+	if !exists {
+		return true // unknown statuses are enabled by default
+	}
+	if info.Enabled == nil {
+		return true // nil means enabled (backward compatibility)
+	}
+	return *info.Enabled
+}
+
+// IsStatusDesktopEnabled returns true if desktop notifications for this status are enabled
+// Considers both global desktop.enabled and per-status enabled
+func (c *Config) IsStatusDesktopEnabled(status string) bool {
+	return c.IsDesktopEnabled() && c.IsStatusEnabled(status)
+}
+
+// IsStatusWebhookEnabled returns true if webhook notifications for this status are enabled
+// Considers both global webhook.enabled and per-status enabled
+func (c *Config) IsStatusWebhookEnabled(status string) bool {
+	return c.IsWebhookEnabled() && c.IsStatusEnabled(status)
 }

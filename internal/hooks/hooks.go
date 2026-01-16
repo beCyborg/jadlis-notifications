@@ -366,16 +366,22 @@ func (h *Handler) sendNotifications(status analyzer.Status, message, sessionID, 
 
 	logging.Debug("Session name: %s, git branch: %s, folder: %s", sessionName, gitBranch, folderName)
 
-	// Send desktop notification
-	if h.cfg.IsDesktopEnabled() {
+	statusStr := string(status)
+
+	// Send desktop notification (check per-status enabled)
+	if h.cfg.IsStatusDesktopEnabled(statusStr) {
 		if err := h.notifierSvc.SendDesktop(status, enhancedMessage); err != nil {
 			errorhandler.HandleError(err, "Failed to send desktop notification")
 		}
+	} else {
+		logging.Debug("Desktop notification disabled for status: %s", statusStr)
 	}
 
-	// Send webhook notification (async)
-	if h.cfg.IsWebhookEnabled() {
+	// Send webhook notification (async, check per-status enabled)
+	if h.cfg.IsStatusWebhookEnabled(statusStr) {
 		h.webhookSvc.SendAsync(status, enhancedMessage, sessionID)
+	} else {
+		logging.Debug("Webhook notification disabled for status: %s", statusStr)
 	}
 }
 
