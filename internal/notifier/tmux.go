@@ -36,9 +36,18 @@ func getTmuxPath() string {
 	return "tmux"
 }
 
-// GetTmuxPaneTarget returns the current tmux pane target (e.g. "%42")
-// for use with tmux select-pane / select-window commands.
+// GetTmuxPaneTarget returns the tmux pane ID (e.g. "%42") of the pane where
+// Claude Code is running, for use with tmux select-pane / select-window commands.
+//
+// Prefers $TMUX_PANE (set by tmux per-pane at creation, always points to the
+// process's own pane) over "tmux display-message" (which returns the currently
+// active pane and may be wrong if the user switched tabs).
 func GetTmuxPaneTarget() (string, error) {
+	if pane := os.Getenv("TMUX_PANE"); pane != "" {
+		return pane, nil
+	}
+
+	// Fallback for environments where TMUX_PANE is not available.
 	cmd := exec.Command("tmux", "display-message", "-p", "#{pane_id}")
 	output, err := cmd.Output()
 	if err != nil {

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.28.0] - 2026-03-02
+
+### Added
+- **Linux: desktop-entry notification hint** — GNOME now correctly identifies the source app when clicking notifications, focusing the terminal/VS Code instead of opening Nautilus. Also adds `suppress-sound` hint to prevent duplicate notification sounds ([#42](https://github.com/777genius/claude-notifications-go/pull/42)) — contributed by [@ductrantrong](https://github.com/ductrantrong)
+
+### Fixed
+- **tmux: click-to-focus targets wrong pane** — `GetTmuxPaneTarget()` now reads `$TMUX_PANE` env var (stable, per-process) instead of `tmux display-message` (returns whichever pane is active). Fixes click-to-focus switching to the wrong tmux tab when the user has navigated away ([#41](https://github.com/777genius/claude-notifications-go/issues/41))
+- **bootstrap.sh: respect `CLAUDE_CONFIG_DIR`** — bootstrap now checks `CLAUDE_CONFIG_DIR` (official Claude Code env var) before `CLAUDE_HOME` when locating the plugins directory ([#43](https://github.com/777genius/claude-notifications-go/issues/43))
+
 ## [1.27.0] - 2026-02-27
 
 ### Added

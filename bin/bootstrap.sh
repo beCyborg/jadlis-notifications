@@ -19,8 +19,9 @@ PLUGIN_NAME="claude-notifications-go"
 PLUGIN_KEY="${PLUGIN_NAME}@${MARKETPLACE_NAME}"
 INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-https://raw.githubusercontent.com/${REPO}/main/bin/install.sh}"
 
-# Paths — use :- for unset, then guard against explicitly empty CLAUDE_HOME
-CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+# Paths — CLAUDE_CONFIG_DIR is the official Claude Code env var;
+# CLAUDE_HOME is a legacy fallback; default to ~/.claude
+CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}"
 if [ -z "$CLAUDE_HOME" ]; then
     CLAUDE_HOME="$HOME/.claude"
 fi
