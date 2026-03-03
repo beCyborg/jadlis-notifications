@@ -175,10 +175,26 @@ if [ "$NEED_INSTALL" = 1 ]; then
 
     if binary_ok; then
         NEW_VER=$(get_binary_version)
-        if [ "$NEED_FORCE" = 1 ]; then
-            printf '{"systemMessage":"[claude-notifications] Updated to v%s"}\n' "$NEW_VER"
-        else
-            printf '{"systemMessage":"[claude-notifications] Installed v%s"}\n' "$NEW_VER"
+        # Avoid repeating the same install/update message more than once per version.
+        if [ -n "$NEW_VER" ]; then
+            STAMP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/claude-notifications-go"
+            STAMP_FILE="$STAMP_DIR/update-stamp"
+            mkdir -p "$STAMP_DIR" >/dev/null 2>&1 || true
+
+            STAMP_KEY="$NEW_VER:$NEED_FORCE"
+            PREV_KEY=""
+            if [ -f "$STAMP_FILE" ]; then
+                IFS= read -r PREV_KEY < "$STAMP_FILE" 2>/dev/null || true
+            fi
+
+            if [ "$PREV_KEY" != "$STAMP_KEY" ]; then
+                printf '%s\n' "$STAMP_KEY" > "$STAMP_FILE" 2>/dev/null || true
+                if [ "$NEED_FORCE" = 1 ]; then
+                    printf '{"systemMessage":"[claude-notifications] Updated to v%s"}\n' "$NEW_VER"
+                else
+                    printf '{"systemMessage":"[claude-notifications] Installed v%s"}\n' "$NEW_VER"
+                fi
+            fi
         fi
     fi
 fi
@@ -190,6 +206,27 @@ if binary_ok; then
         CLAUDE_PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
     fi
     export CLAUDE_PLUGIN_ROOT
+
+    # Persist a stable pointer to the current plugin root outside the plugin cache.
+    # This is a best-effort fallback for older cached paths and for shim wrappers.
+    _CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-${CLAUDE_HOME:-$HOME/.claude}}"
+    if [ -z "$_CLAUDE_HOME" ]; then
+        _CLAUDE_HOME="$HOME/.claude"
+    fi
+    _PTR_DIR="$_CLAUDE_HOME/claude-notifications-go"
+    _PTR_FILE="$_PTR_DIR/plugin-root"
+    mkdir -p "$_PTR_DIR" >/dev/null 2>&1 || true
+    _PREV_PTR=""
+    if [ -f "$_PTR_FILE" ]; then
+        IFS= read -r _PREV_PTR < "$_PTR_FILE" 2>/dev/null || true
+    fi
+    if [ "$_PREV_PTR" != "$CLAUDE_PLUGIN_ROOT" ]; then
+        _TMP_PTR="$_PTR_FILE.tmp.$$"
+        printf '%s\n' "$CLAUDE_PLUGIN_ROOT" > "$_TMP_PTR" 2>/dev/null && \
+            mv "$_TMP_PTR" "$_PTR_FILE" 2>/dev/null || true
+        rm -f "$_TMP_PTR" 2>/dev/null || true
+    fi
+
     run_binary "$@" || true
 fi
 

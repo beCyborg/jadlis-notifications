@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.29.2] - 2026-03-03
+
+### Fixed
+- **Linux: click-to-focus reliability** — focus methods (`activate-window-by-title`, GNOME `FocusApp`, `xdotool`) now properly validate activation results instead of silently succeeding when no window was actually focused. `xdotool windowactivate` uses `--sync` to ensure the activation request completes ([#44](https://github.com/777genius/claude-notifications-go/issues/44))
+- **Linux: terminal detection in hook process** — focus target is now detected in the hook process instead of the daemon, since the daemon may have been started from a different environment where terminal-specific env vars (e.g. `TERMINATOR_UUID`) are not available ([#44](https://github.com/777genius/claude-notifications-go/issues/44))
+- **"Updated to" message shown repeatedly** — the `[claude-notifications] Updated to vX.Y.Z` system message is now shown only once per version, using a stamp file to prevent duplicates across hook invocations
+
+### Changed
+- **bootstrap.sh: shim directories replace symlinks** — old cached version paths now use a lightweight shim `hook-wrapper.sh` that forwards to the current install, instead of symlinks (which are unreliable on Windows)
+
 ## [1.29.1] - 2026-03-02
 
 ### Fixed

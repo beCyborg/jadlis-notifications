@@ -63,6 +63,12 @@ func TryActivateWindowByTitle(terminalName, folderName string) error {
 	if err != nil {
 		return fmt.Errorf("activate-window-by-title extension not available: %w, output: %s", err, string(output))
 	}
+	// busctl can succeed (exit code 0) even when no window was activated.
+	// The extension returns a boolean; ensure we only treat "true" as success.
+	outputStr := strings.TrimSpace(string(output))
+	if strings.Contains(outputStr, "false") || outputStr == "" {
+		return fmt.Errorf("activate-window-by-title: no window activated for %q (output: %s)", searchTerm, outputStr)
+	}
 	return nil
 }
 
@@ -166,6 +172,10 @@ func TryGnomeFocusApp(terminalName, folderName string) error {
 	if err != nil {
 		return fmt.Errorf("gdbus FocusApp failed: %w, output: %s", err, string(output))
 	}
+	outputStr := strings.TrimSpace(string(output))
+	if strings.Contains(outputStr, "false") || outputStr == "" {
+		return fmt.Errorf("gdbus FocusApp reported no activation for %q (output: %s)", appID, outputStr)
+	}
 	return nil
 }
 
@@ -244,7 +254,8 @@ func TryXdotool(terminalName, folderName string) error {
 
 	// Take the first matching window
 	windowIDs := strings.Split(outputStr, "\n")
-	cmd := exec.Command("xdotool", "windowactivate", windowIDs[0])
+	// --sync helps ensure the activation request is processed before returning.
+	cmd := exec.Command("xdotool", "windowactivate", "--sync", windowIDs[0])
 	if _, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("xdotool windowactivate failed: %w", err)
 	}

@@ -82,8 +82,11 @@ func sendViaDaemon(title, body, cwd string) error {
 		folderName = filepath.Base(cwd)
 	}
 
-	// Send notification with 30 second timeout, auto-detect terminal
-	_, err = client.SendNotification(title, body, "", folderName, 30)
+	// Send notification with 30 second timeout.
+	// Detect focus target in the hook process (not the daemon), since the daemon may
+	// have been started from a different environment.
+	focusTarget := daemon.GetTerminalName()
+	_, err = client.SendNotification(title, body, focusTarget, folderName, 30)
 	return err
 }
 
