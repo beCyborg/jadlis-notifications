@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0] - 2026-03-07
+
+### Added
+- **Linux: X11 window ID for click-to-focus** — notifications now pass the terminal's X11 window ID (`$WINDOWID`) to the daemon, enabling direct `xdotool windowactivate` targeting instead of unreliable title-based matching. Includes `TryFocusWithWindowID` priority path and automatic fallback to existing methods
+- **tmux pane target fallback** — `GetTmuxPaneTarget` now uses the resolved tmux binary and explicit socket path for better compatibility across environments (e.g., when `TMUX_PANE` is not set)
+
+### Fixed
+- **Notification suppression default** — changed default `SuppressQuestionAfterAnyNotificationSeconds` from 0 to 7 seconds, preventing repeated "question" notifications immediately after other notifications
+
+### Changed
+- Improved installation instructions and error handling in `install.sh` — better diagnostic messages for curl/transport failures, especially for Windows users behind corporate proxies
+- Clarified README and `setup.sh` to specify commands should be run inside Claude Code
+
 ## [1.30.0] - 2026-03-03
 
 ### Added
