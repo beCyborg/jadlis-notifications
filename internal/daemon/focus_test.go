@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -50,5 +51,60 @@ func TestGetFocusMethods_AllHaveFunctions(t *testing.T) {
 		if m.Fn == nil {
 			t.Errorf("FocusMethod %q has nil Fn", m.Name)
 		}
+	}
+}
+
+func TestNormalizeX11WindowID_Decimal(t *testing.T) {
+	got, err := normalizeX11WindowID("12345")
+	if err != nil {
+		t.Fatalf("normalizeX11WindowID returned error: %v", err)
+	}
+	if got != "12345" {
+		t.Errorf("normalizeX11WindowID(decimal) = %q, want %q", got, "12345")
+	}
+}
+
+func TestNormalizeX11WindowID_Hex(t *testing.T) {
+	got, err := normalizeX11WindowID("0x3039")
+	if err != nil {
+		t.Fatalf("normalizeX11WindowID returned error: %v", err)
+	}
+	if got != "12345" {
+		t.Errorf("normalizeX11WindowID(hex) = %q, want %q", got, "12345")
+	}
+}
+
+func TestNormalizeX11WindowID_Invalid(t *testing.T) {
+	if _, err := normalizeX11WindowID("not-a-window"); err == nil {
+		t.Fatal("normalizeX11WindowID should reject invalid input")
+	}
+}
+
+func TestBuildXdotoolSearches_Order(t *testing.T) {
+	searches := buildXdotoolSearches("terminator", "project")
+
+	got := make([][]string, 0, len(searches))
+	for _, search := range searches {
+		got = append(got, search.args)
+	}
+
+	want := [][]string{
+		{"search", "--onlyvisible", "--class", "Terminator"},
+		{"search", "--class", "Terminator"},
+		{"search", "--onlyvisible", "--name", "terminator"},
+		{"search", "--name", "terminator"},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("buildXdotoolSearches() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSplitWindowIDs_TrimsBlankLines(t *testing.T) {
+	got := splitWindowIDs("\n123\n 456 \n\n789\n")
+	want := []string{"123", "456", "789"}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("splitWindowIDs() = %#v, want %#v", got, want)
 	}
 }

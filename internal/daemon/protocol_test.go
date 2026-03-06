@@ -110,10 +110,11 @@ func TestRequest_JSONRoundtrip_Notify(t *testing.T) {
 		Type:    MessageTypeNotify,
 		Version: ProtocolVersion,
 		Notify: &NotifyRequest{
-			Title:       "Test Title",
-			Body:        "Test Body",
-			FocusTarget: "code",
-			Timeout:     30,
+			Title:         "Test Title",
+			Body:          "Test Body",
+			FocusTarget:   "code",
+			FocusWindowID: "12345",
+			Timeout:       30,
 		},
 	}
 
@@ -144,6 +145,9 @@ func TestRequest_JSONRoundtrip_Notify(t *testing.T) {
 	}
 	if decoded.Notify.FocusTarget != "code" {
 		t.Errorf("FocusTarget = %q, want %q", decoded.Notify.FocusTarget, "code")
+	}
+	if decoded.Notify.FocusWindowID != "12345" {
+		t.Errorf("FocusWindowID = %q, want %q", decoded.Notify.FocusWindowID, "12345")
 	}
 	if decoded.Notify.Timeout != 30 {
 		t.Errorf("Timeout = %d, want %d", decoded.Notify.Timeout, 30)

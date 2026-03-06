@@ -6,6 +6,7 @@ package notifier
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/777genius/claude-notifications/internal/config"
@@ -86,7 +87,12 @@ func sendViaDaemon(title, body, cwd string) error {
 	// Detect focus target in the hook process (not the daemon), since the daemon may
 	// have been started from a different environment.
 	focusTarget := daemon.GetTerminalName()
-	_, err = client.SendNotification(title, body, focusTarget, folderName, 30)
+	focusWindowID := daemon.GetX11WindowID()
+	if sessionType := os.Getenv("XDG_SESSION_TYPE"); sessionType != "" && sessionType != "x11" {
+		focusWindowID = ""
+	}
+
+	_, err = client.SendNotification(title, body, focusTarget, folderName, focusWindowID, 30)
 	return err
 }
 

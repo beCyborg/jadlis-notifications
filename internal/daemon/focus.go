@@ -7,6 +7,7 @@ package daemon
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -33,6 +34,21 @@ func GetFocusMethods() []FocusMethod {
 // folderName is the project folder name used for title-based window search (may be empty).
 // It tries each method in order until one succeeds.
 func TryFocus(terminalName, folderName string) error {
+	return TryFocusWithWindowID(terminalName, folderName, "")
+}
+
+// TryFocusWithWindowID attempts exact X11 window focus first when an exact window ID
+// was captured in the hook process, then falls back to compositor-specific methods.
+func TryFocusWithWindowID(terminalName, folderName, windowID string) error {
+	var exactErr error
+	if strings.TrimSpace(windowID) != "" {
+		if err := tryX11WindowID(windowID); err == nil {
+			return nil
+		} else {
+			exactErr = err
+		}
+	}
+
 	methods := GetFocusMethods()
 
 	var lastErr error
@@ -44,7 +60,76 @@ func TryFocus(terminalName, folderName string) error {
 		return nil
 	}
 
+	if exactErr != nil && lastErr != nil {
+		return fmt.Errorf("%v; fallback focus failed, last error: %v", exactErr, lastErr)
+	}
+	if exactErr != nil {
+		return exactErr
+	}
 	return fmt.Errorf("all focus methods failed, last error: %v", lastErr)
+}
+
+func tryX11WindowID(windowID string) error {
+	normalizedID, err := normalizeX11WindowID(windowID)
+	if err != nil {
+		return fmt.Errorf("invalid X11 window id %q: %w", windowID, err)
+	}
+
+	var errs []string
+
+	if err := activateWindowIDWithXdotool(normalizedID); err == nil {
+		return nil
+	} else {
+		errs = append(errs, err.Error())
+	}
+
+	if err := activateWindowIDWithWmctrl(normalizedID); err == nil {
+		return nil
+	} else {
+		errs = append(errs, err.Error())
+	}
+
+	return fmt.Errorf("exact X11 focus failed: %s", strings.Join(errs, "; "))
+}
+
+func activateWindowIDWithXdotool(windowID string) error {
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return fmt.Errorf("xdotool not installed")
+	}
+
+	cmd := exec.Command("xdotool", "windowactivate", "--sync", windowID)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("xdotool windowactivate failed: %w, output: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func activateWindowIDWithWmctrl(windowID string) error {
+	if _, err := exec.LookPath("wmctrl"); err != nil {
+		return fmt.Errorf("wmctrl not installed")
+	}
+
+	cmd := exec.Command("wmctrl", "-i", "-a", windowID)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wmctrl -i -a failed: %w, output: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func normalizeX11WindowID(windowID string) (string, error) {
+	windowID = strings.TrimSpace(windowID)
+	if windowID == "" {
+		return "", fmt.Errorf("empty window id")
+	}
+
+	id, err := strconv.ParseUint(windowID, 0, 64)
+	if err != nil {
+		return "", err
+	}
+
+	return strconv.FormatUint(id, 10), nil
 }
 
 // TryActivateWindowByTitle uses the activate-window-by-title GNOME extension.
@@ -234,32 +319,108 @@ func TryXdotool(terminalName, folderName string) error {
 		return fmt.Errorf("xdotool not installed")
 	}
 
-	// Search by class name first (more reliable)
-	className := GetXdotoolClass(terminalName)
-	searchCmd := exec.Command("xdotool", "search", "--class", className)
-	output, err := searchCmd.CombinedOutput()
-	outputStr := strings.TrimSpace(string(output))
+	searches := buildXdotoolSearches(terminalName, folderName)
+	seenIDs := make(map[string]struct{})
+	foundMatch := false
+	var errs []string
 
-	if err != nil || outputStr == "" {
-		// Fallback: search by window name
-		searchTerm := GetSearchTermWithFolder(terminalName, folderName)
-		searchCmd = exec.Command("xdotool", "search", "--name", searchTerm)
-		output, err = searchCmd.CombinedOutput()
-		outputStr = strings.TrimSpace(string(output))
+	for _, search := range searches {
+		windowIDs, err := runXdotoolSearch(search.args...)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", search.label, err))
+			continue
+		}
+		if len(windowIDs) == 0 {
+			continue
+		}
+
+		foundMatch = true
+
+		// xdotool returns bottom-most windows first; prefer the top-most candidate.
+		for i := len(windowIDs) - 1; i >= 0; i-- {
+			windowID := windowIDs[i]
+			if _, exists := seenIDs[windowID]; exists {
+				continue
+			}
+			seenIDs[windowID] = struct{}{}
+
+			if err := activateWindowIDWithXdotool(windowID); err == nil {
+				return nil
+			} else {
+				errs = append(errs, fmt.Sprintf("%s (%s): %v", search.label, windowID, err))
+			}
+		}
 	}
 
-	if err != nil || outputStr == "" {
+	if !foundMatch {
 		return fmt.Errorf("no windows found via xdotool")
 	}
 
-	// Take the first matching window
-	windowIDs := strings.Split(outputStr, "\n")
-	// --sync helps ensure the activation request is processed before returning.
-	cmd := exec.Command("xdotool", "windowactivate", "--sync", windowIDs[0])
-	if _, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("xdotool windowactivate failed: %w", err)
+	return fmt.Errorf("xdotool could not activate any matching window: %s", strings.Join(errs, "; "))
+}
+
+type xdotoolSearch struct {
+	label string
+	args  []string
+}
+
+func buildXdotoolSearches(terminalName, folderName string) []xdotoolSearch {
+	className := GetXdotoolClass(terminalName)
+	searchTerm := GetSearchTermWithFolder(terminalName, folderName)
+
+	searches := []xdotoolSearch{
+		{
+			label: "visible class search",
+			args:  []string{"search", "--onlyvisible", "--class", className},
+		},
+		{
+			label: "class search",
+			args:  []string{"search", "--class", className},
+		},
 	}
-	return nil
+
+	if searchTerm != "" {
+		searches = append(searches,
+			xdotoolSearch{
+				label: "visible name search",
+				args:  []string{"search", "--onlyvisible", "--name", searchTerm},
+			},
+			xdotoolSearch{
+				label: "name search",
+				args:  []string{"search", "--name", searchTerm},
+			},
+		)
+	}
+
+	return searches
+}
+
+func runXdotoolSearch(args ...string) ([]string, error) {
+	cmd := exec.Command("xdotool", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("%w, output: %s", err, strings.TrimSpace(string(output)))
+	}
+
+	outputStr := strings.TrimSpace(string(output))
+	if outputStr == "" {
+		return nil, nil
+	}
+
+	return splitWindowIDs(outputStr), nil
+}
+
+func splitWindowIDs(output string) []string {
+	lines := strings.Split(output, "\n")
+	ids := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		ids = append(ids, line)
+	}
+	return ids
 }
 
 // DetectFocusTools returns a map of available focus tools.
@@ -267,7 +428,7 @@ func DetectFocusTools() map[string]bool {
 	tools := map[string]bool{}
 
 	// Check command-line tools
-	for _, tool := range []string{"wlrctl", "kdotool", "xdotool", "gdbus", "busctl"} {
+	for _, tool := range []string{"wlrctl", "kdotool", "xdotool", "wmctrl", "gdbus", "busctl"} {
 		_, err := exec.LookPath(tool)
 		tools[tool] = err == nil
 	}

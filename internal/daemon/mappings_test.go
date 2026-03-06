@@ -9,7 +9,7 @@ import (
 // saveTerminalEnv saves all terminal-related env vars and returns a restore function.
 func saveTerminalEnv(t *testing.T) func() {
 	t.Helper()
-	vars := []string{"TERM_PROGRAM", "VSCODE_INJECTION", "VSCODE_GIT_IPC_HANDLE", "GNOME_TERMINAL_SCREEN", "GNOME_TERMINAL_SERVICE", "TERMINATOR_UUID"}
+	vars := []string{"TERM_PROGRAM", "VSCODE_INJECTION", "VSCODE_GIT_IPC_HANDLE", "GNOME_TERMINAL_SCREEN", "GNOME_TERMINAL_SERVICE", "TERMINATOR_UUID", "WINDOWID"}
 	type envState struct {
 		value string
 		isSet bool
@@ -474,6 +474,28 @@ func TestGetTerminalName_TermProgramOverridesTerminatorUUID(t *testing.T) {
 	result := GetTerminalName()
 	if result != "alacritty" {
 		t.Errorf("GetTerminalName() with TERM_PROGRAM+TERMINATOR_UUID = %q, want %q", result, "alacritty")
+	}
+}
+
+func TestGetX11WindowID(t *testing.T) {
+	restore := saveTerminalEnv(t)
+	defer restore()
+
+	t.Setenv("WINDOWID", "12345")
+
+	if got := GetX11WindowID(); got != "12345" {
+		t.Errorf("GetX11WindowID() = %q, want %q", got, "12345")
+	}
+}
+
+func TestGetX11WindowID_TrimsWhitespace(t *testing.T) {
+	restore := saveTerminalEnv(t)
+	defer restore()
+
+	t.Setenv("WINDOWID", "  0x123  ")
+
+	if got := GetX11WindowID(); got != "0x123" {
+		t.Errorf("GetX11WindowID() = %q, want %q", got, "0x123")
 	}
 }
 

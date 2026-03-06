@@ -168,3 +168,9 @@ func GetTerminalName() string {
 	// Fallback to generic terminal
 	return "Terminal"
 }
+
+// GetX11WindowID returns the current terminal window's X11 window ID when available.
+// It is captured in the hook process and later used by the daemon for exact focus on X11.
+func GetX11WindowID() string {
+	return strings.TrimSpace(os.Getenv("WINDOWID"))
+}

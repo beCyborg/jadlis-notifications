@@ -36,16 +36,18 @@ func NewClient() (*Client, error) {
 
 // SendNotification sends a notification request to the daemon.
 // focusFolder is the project folder name for window-specific focus (may be empty).
-func (c *Client) SendNotification(title, body, focusTarget, focusFolder string, timeout int) (*NotifyResponse, error) {
+// focusWindowID is an optional exact X11 window ID captured in the hook process.
+func (c *Client) SendNotification(title, body, focusTarget, focusFolder, focusWindowID string, timeout int) (*NotifyResponse, error) {
 	req := Request{
 		Type:    MessageTypeNotify,
 		Version: ProtocolVersion,
 		Notify: &NotifyRequest{
-			Title:       title,
-			Body:        body,
-			FocusTarget: focusTarget,
-			FocusFolder: focusFolder,
-			Timeout:     timeout,
+			Title:         title,
+			Body:          body,
+			FocusTarget:   focusTarget,
+			FocusFolder:   focusFolder,
+			FocusWindowID: focusWindowID,
+			Timeout:       timeout,
 		},
 	}
 

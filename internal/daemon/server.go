@@ -21,8 +21,9 @@ import (
 
 // focusInfo holds the focus target and folder for a notification.
 type focusInfo struct {
-	target string
-	folder string
+	target   string
+	folder   string
+	windowID string
 }
 
 // Server is the notification daemon server
@@ -277,10 +278,15 @@ func (s *Server) handleNotification(req *NotifyRequest) (*NotifyResponse, error)
 
 	// Store focus context
 	s.focusCtxMu.Lock()
-	s.focusCtx[id] = focusInfo{target: focusTarget, folder: req.FocusFolder}
+	s.focusCtx[id] = focusInfo{
+		target:   focusTarget,
+		folder:   req.FocusFolder,
+		windowID: req.FocusWindowID,
+	}
 	s.focusCtxMu.Unlock()
 
-	log.Printf("[INFO] Notification sent: ID=%d, focus_target=%s, focus_folder=%s", id, focusTarget, req.FocusFolder)
+	log.Printf("[INFO] Notification sent: ID=%d, focus_target=%s, focus_folder=%s, focus_window_id=%s",
+		id, focusTarget, req.FocusFolder, req.FocusWindowID)
 
 	return &NotifyResponse{
 		Success:        true,
@@ -302,6 +308,7 @@ func (s *Server) onActionInvoked(sig *notify.ActionInvokedSignal) {
 	s.focusCtxMu.RUnlock()
 	focusTarget := info.target
 	focusFolder := info.folder
+	focusWindowID := info.windowID
 
 	if !exists {
 		log.Printf("[WARN] No focus context for notification %d", sig.ID)
@@ -309,8 +316,8 @@ func (s *Server) onActionInvoked(sig *notify.ActionInvokedSignal) {
 	}
 
 	// Attempt to focus
-	log.Printf("[INFO] Attempting to focus: %s (folder: %s)", focusTarget, focusFolder)
-	if err := TryFocus(focusTarget, focusFolder); err != nil {
+	log.Printf("[INFO] Attempting to focus: %s (folder: %s, window_id: %s)", focusTarget, focusFolder, focusWindowID)
+	if err := TryFocusWithWindowID(focusTarget, focusFolder, focusWindowID); err != nil {
 		log.Printf("[ERROR] Focus failed: %v", err)
 	} else {
 		log.Printf("[INFO] Focus succeeded")
