@@ -32,6 +32,7 @@ TESTS_SKIPPED=0
 RUN_REAL_NETWORK=false
 RUN_MOCK_ONLY=false
 VERBOSE=false
+ALLOW_WINDOWS_REAL_NETWORK_TESTS="${ALLOW_WINDOWS_REAL_NETWORK_TESTS:-false}"
 
 # Mock server state
 MOCK_PID=""
@@ -106,6 +107,22 @@ get_binary_name() {
 # Check if on Windows
 is_windows() {
     [ "$(get_platform)" = "windows" ]
+}
+
+real_network_tests_supported() {
+    if [ "$RUN_REAL_NETWORK" != true ]; then
+        return 1
+    fi
+
+    # Hosted Windows runners are significantly flakier for real GitHub/CDN downloads:
+    # the step can hang or lose runner connectivity even when the install logic is fine.
+    # Keep the deterministic coverage on Windows via offline + mock tests, and allow
+    # opt-in real-network runs when someone explicitly wants to exercise them.
+    if is_windows && [ -n "${CI:-}" ] && [ "$ALLOW_WINDOWS_REAL_NETWORK_TESTS" != "true" ]; then
+        return 1
+    fi
+
+    return 0
 }
 
 # Cross-platform timeout command
@@ -891,6 +908,11 @@ test_real_github_available() {
         return
     fi
 
+    if ! real_network_tests_supported; then
+        skip_test "GitHub available" "real-network tests disabled on Windows CI by default"
+        return
+    fi
+
     if curl -s --max-time 10 -I https://github.com &>/dev/null; then
         echo -e "  ${GREEN}✓${NC} GitHub is reachable"
         TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -909,6 +931,11 @@ test_real_full_install() {
         return
     fi
 
+    if ! real_network_tests_supported; then
+        skip_test "Real full install" "real-network tests disabled on Windows CI by default"
+        return
+    fi
+
     if [ "$RELEASE_BINARY_AVAILABLE" != true ]; then
         skip_test "Real full install" "release binary not yet available"
         return
@@ -916,8 +943,10 @@ test_real_full_install() {
 
     setup_test_dir
 
-    output=$(INSTALL_TARGET_DIR="$TEST_DIR" bash "$INSTALL_SCRIPT" 2>&1)
+    set +e
+    output=$(INSTALL_TARGET_DIR="$TEST_DIR" run_with_timeout 120 bash "$INSTALL_SCRIPT" 2>&1)
     exit_code=$?
+    set -e
 
     assert_exit_code 0 $exit_code "Install completed successfully"
     # On Windows, wrapper is .bat file; on Unix it's a symlink
@@ -938,6 +967,11 @@ test_real_binary_runs() {
         return
     fi
 
+    if ! real_network_tests_supported; then
+        skip_test "Binary runs" "real-network tests disabled on Windows CI by default"
+        return
+    fi
+
     if [ "$RELEASE_BINARY_AVAILABLE" != true ]; then
         skip_test "Binary runs" "release binary not yet available"
         return
@@ -945,7 +979,7 @@ test_real_binary_runs() {
 
     setup_test_dir
 
-    INSTALL_TARGET_DIR="$TEST_DIR" bash "$INSTALL_SCRIPT" 2>&1 || true
+    INSTALL_TARGET_DIR="$TEST_DIR" run_with_timeout 120 bash "$INSTALL_SCRIPT" 2>&1 || true
 
     # Determine correct binary/wrapper path
     local binary_path
@@ -975,6 +1009,11 @@ test_real_utilities_installed() {
         return
     fi
 
+    if ! real_network_tests_supported; then
+        skip_test "Utilities installed" "real-network tests disabled on Windows CI by default"
+        return
+    fi
+
     if [ "$RELEASE_BINARY_AVAILABLE" != true ]; then
         skip_test "Utilities installed" "release binary not yet available"
         return
@@ -982,7 +1021,7 @@ test_real_utilities_installed() {
 
     setup_test_dir
 
-    INSTALL_TARGET_DIR="$TEST_DIR" bash "$INSTALL_SCRIPT" 2>&1 || true
+    INSTALL_TARGET_DIR="$TEST_DIR" run_with_timeout 120 bash "$INSTALL_SCRIPT" 2>&1 || true
 
     # On Windows, utilities use .bat wrappers
     if is_windows; then
@@ -1006,6 +1045,11 @@ test_real_terminal_notifier_macos() {
         return
     fi
 
+    if ! real_network_tests_supported; then
+        skip_test "terminal-notifier" "real-network tests disabled on Windows CI by default"
+        return
+    fi
+
     if [ "$(uname)" != "Darwin" ]; then
         skip_test "terminal-notifier" "not on macOS"
         return
@@ -1018,7 +1062,7 @@ test_real_terminal_notifier_macos() {
 
     setup_test_dir
 
-    INSTALL_TARGET_DIR="$TEST_DIR" bash "$INSTALL_SCRIPT" 2>&1 || true
+    INSTALL_TARGET_DIR="$TEST_DIR" run_with_timeout 120 bash "$INSTALL_SCRIPT" 2>&1 || true
 
     # ClaudeNotifier.app is the modern notifier (preferred over legacy terminal-notifier.app)
     assert_dir_exists "$TEST_DIR/ClaudeNotifier.app" "ClaudeNotifier.app installed"
@@ -1623,7 +1667,7 @@ main() {
         # Race condition: pre-check may pass (old release), but by the time install.sh runs,
         # /releases/latest may have switched to the new release (without binaries yet).
         RELEASE_BINARY_AVAILABLE=false
-        if [ "$RUN_REAL_NETWORK" = true ]; then
+        if real_network_tests_supported; then
             local _check_url="https://github.com/777genius/claude-notifications-go/releases/latest/download"
             local _check_bin
             case "$(uname -s)-$(uname -m)" in
@@ -1657,6 +1701,8 @@ main() {
                     echo -e "  ${YELLOW}⚠${NC} Latest release binary not yet available (HTTP $_http_code) — download tests will be skipped"
                 fi
             fi
+        elif [ "$RUN_REAL_NETWORK" = true ]; then
+            echo -e "  ${YELLOW}⚠${NC} Real-network tests disabled on Windows CI by default — Category C will be skipped"
         fi
 
         # Category C: Real Network Tests
