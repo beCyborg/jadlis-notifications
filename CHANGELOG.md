@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.0] - 2026-03-07
+
+### Added
+- **Local plugin development tooling** — new scripts (`dev-local-plugin.sh`, `dev-real-plugin.sh`, `e2e-real-claude.sh`) and Makefile targets for isolated and real-Claude plugin workflows, so contributors can reproduce plugin updates and click-to-focus issues with less setup
+- **Linux focus diagnostics** — `linux-focus-debug.sh` script for troubleshooting click-to-focus issues on Linux
+- **Developer documentation** — `docs/LOCAL_DEVELOPMENT.md` guide, expanded `CONTRIBUTING.md`, `docs/CLICK_TO_FOCUS.md`, and `docs/troubleshooting.md`
+
+### Fixed
+- **Linux: exact window targeting for click-to-focus** — notification clicks now capture exact window hints (X11 window ID, WM class, PID) from the hook process and use them before falling back to generic terminal title matching, significantly improving reliability on multi-window setups
+- **Bootstrap plugin updates** — hardened marketplace checkout and installed plugin version verification during bootstrap, so one-line installs recover cleanly when Claude leaves an older cached plugin version in place
+
 ## [1.31.0] - 2026-03-07
 
 ### Added
