@@ -25,7 +25,7 @@ make build
 /plugin marketplace add .
 
 # Install plugin
-/plugin install claude-notifications-go@local-dev
+/plugin install claude-notifications-go@claude-notifications-go
 
 # Restart Claude Code for hooks to take effect
 
@@ -35,6 +35,34 @@ make build
 ```
 
 `/claude-notifications-go:init` will use your locally built binary from `bin/` if it exists, otherwise it downloads from GitHub Releases.
+
+For repeatable local install/update testing without touching your real Claude setup, use:
+
+```bash
+scripts/dev-local-plugin.sh install
+scripts/dev-local-plugin.sh bootstrap
+scripts/dev-local-plugin.sh status
+```
+
+This uses an isolated Claude config dir under `~/.claude-dev/claude-notifications-go` by default.
+
+For the full local-development workflow, including real-`claude` E2E tests and switching your real Claude environment between local and remote sources, see **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)**.
+
+## Local Testing Workflows
+
+Use the smallest workflow that matches the change:
+
+- `scripts/dev-local-plugin.sh` for safe install/update/bootstrap testing in an isolated Claude config
+- `scripts/e2e-real-claude.sh` for real-`claude` smoke/manual validation
+- `scripts/dev-real-plugin.sh` only when you must validate inside your real `~/.claude` setup
+
+Start with:
+
+```bash
+scripts/e2e-real-claude.sh status
+```
+
+Then follow **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for the detailed workflow, platform support, and recommended validation matrix.
 
 ## Project Structure
 
@@ -84,6 +112,10 @@ go test ./internal/dedup -v -race
 ```bash
 go test ./test -v
 ```
+
+### Real-Claude smoke tests
+
+See **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for supported platforms, command examples, and manual click-to-focus validation notes.
 
 ### Run a single test
 

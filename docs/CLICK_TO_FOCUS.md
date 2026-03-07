@@ -67,6 +67,23 @@ Focus methods (tried in order):
 
 Falls back to standard notifications if no focus tool is available.
 
+### Diagnostics
+
+If Linux click-to-focus focuses the wrong window, run the diagnostic script immediately after reproducing the failed click:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/777genius/claude-notifications-go/main/scripts/linux-focus-debug.sh | bash
+```
+
+It writes a report file in the current directory with:
+
+- session type and terminal environment variables
+- available focus tools (`xdotool`, `wmctrl`, `remotinator`, etc.)
+- current window information and window lists
+- installed plugin metadata and recent `notification-debug.log` lines
+
+Review the file before sharing it publicly, because it may include local paths and window titles.
+
 ## Multiplexers
 
 On both macOS and Linux, click-to-focus supports **tmux**, **zellij**, **WezTerm**, and **kitty** — clicking a notification switches to the correct session/pane/tab.

@@ -1,4 +1,8 @@
-.PHONY: build test test-race lint clean install help build-notifier
+.PHONY: build test test-race lint clean install help build-notifier \
+	dev-local-install dev-local-update dev-local-bootstrap dev-local-status dev-local-reset \
+	dev-real-local dev-real-remote dev-real-toggle dev-real-status \
+	e2e-status e2e-smoke e2e-smoke-installed e2e-manual e2e-manual-installed \
+	linux-focus-debug
 
 # Binary names
 BINARY=claude-notifications
@@ -71,6 +75,52 @@ install: build ## Install binary to /usr/local/bin
 	@cp $(BINARY_PATH) /usr/local/bin/$(BINARY)
 	@echo "Installation complete!"
 
+# Local plugin workflows
+dev-local-install: ## Install plugin in isolated Claude config
+	@bash scripts/dev-local-plugin.sh install
+
+dev-local-update: ## Update plugin in isolated Claude config
+	@bash scripts/dev-local-plugin.sh update
+
+dev-local-bootstrap: ## Run bootstrap in isolated Claude config
+	@bash scripts/dev-local-plugin.sh bootstrap
+
+dev-local-status: ## Show isolated Claude config plugin status
+	@bash scripts/dev-local-plugin.sh status
+
+dev-local-reset: ## Reset isolated Claude config
+	@bash scripts/dev-local-plugin.sh reset
+
+dev-real-local: ## Point real Claude marketplace to local source
+	@bash scripts/dev-real-plugin.sh local
+
+dev-real-remote: ## Point real Claude marketplace back to remote source
+	@bash scripts/dev-real-plugin.sh remote
+
+dev-real-toggle: ## Toggle real Claude marketplace between local and remote
+	@bash scripts/dev-real-plugin.sh toggle
+
+dev-real-status: ## Show real Claude marketplace/plugin status
+	@bash scripts/dev-real-plugin.sh status
+
+e2e-status: ## Show real-Claude E2E support and target status
+	@bash scripts/e2e-real-claude.sh status
+
+e2e-smoke: ## Run real-Claude smoke test via --plugin-dir
+	@bash scripts/e2e-real-claude.sh smoke-plugin-dir
+
+e2e-smoke-installed: ## Run real-Claude smoke test against installed plugin
+	@bash scripts/e2e-real-claude.sh smoke-installed
+
+e2e-manual: ## Run manual click validation via --plugin-dir
+	@bash scripts/e2e-real-claude.sh manual-click-plugin-dir
+
+e2e-manual-installed: ## Run manual click validation against installed plugin
+	@bash scripts/e2e-real-claude.sh manual-click-installed
+
+linux-focus-debug: ## Collect Linux click-to-focus diagnostics report
+	@bash scripts/linux-focus-debug.sh
+
 # Cleanup
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
@@ -98,4 +148,4 @@ build-notifier: ## Build ClaudeNotifier .app bundle (macOS)
 # Help
 help: ## Show this help message
 	@echo "Available targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'

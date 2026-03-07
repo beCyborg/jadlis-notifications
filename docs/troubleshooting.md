@@ -61,6 +61,33 @@ mount | grep -E ' on /tmp | on /home '
 
 If `/tmp` is `tmpfs` (or otherwise on a different device) and `$HOME` is on `ext4/btrfs/...`, the error is expected without the `TMPDIR` workaround.
 
+## Linux: click-to-focus opens the wrong window
+
+### Symptom
+
+Clicking a notification focuses the wrong terminal window, a stale Terminator window, or does nothing.
+
+### Quick diagnostics
+
+Reproduce the failed click first, then run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/777genius/claude-notifications-go/main/scripts/linux-focus-debug.sh | bash
+```
+
+The script generates a report file in the current directory with:
+
+- `XDG_SESSION_TYPE`, `DISPLAY`, `WAYLAND_DISPLAY`, `TERM_PROGRAM`, `TERMINATOR_UUID`, `WINDOWID`
+- installed plugin version/path and marketplace source
+- available focus tools like `xdotool`, `wmctrl`, and `remotinator`
+- active-window data, `wmctrl` window lists, `xdotool` searches, and recent plugin log lines
+
+Review the file before posting it publicly, because it may include local file paths and window titles.
+
+### Why this helps
+
+Linux click-to-focus behavior depends on the session type, terminal, window manager, and available focus tools. The diagnostic script captures the exact environment needed to explain why the plugin focused the wrong window or could not focus anything at all.
+
 ## Windows: install issues related to `%TEMP%` / `%TMP%` location
 
 If your temp directory is on a different drive than your user profile (or where Claude stores plugin cache), you may see similar cross-device move issues.

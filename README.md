@@ -373,6 +373,7 @@ echo '{"session_id":"test","transcript_path":"/path/to/transcript.jsonl"}' | \
 ## Contributing
 
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development setup, testing, building, and submitting changes.
+For local plugin workflows and real-`claude` smoke/manual E2E testing, see **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)**.
 
 ## Troubleshooting
 
@@ -385,6 +386,8 @@ See **[Troubleshooting Guide](docs/troubleshooting.md)** for common issues:
 ## Documentation
 
 - **[Architecture](docs/ARCHITECTURE.md)** - Plugin architecture, directory structure, data flow
+
+- **[Local Development And E2E](docs/LOCAL_DEVELOPMENT.md)** - Local marketplace testing, real Claude smoke tests, manual click-to-focus validation
 
 - **[Click-to-Focus](docs/CLICK_TO_FOCUS.md)** - Configuration, supported terminals, platform details
 
