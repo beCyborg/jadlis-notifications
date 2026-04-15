@@ -3,6 +3,10 @@
 package notifier
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -125,5 +129,128 @@ func TestRetryWindowFocusWithDelays_RestoredOnLastAttemptGetsExtraRetry(t *testi
 	}
 	if slept[3] != delays[len(delays)-1] {
 		t.Fatalf("post-restore sleep = %v, want %v", slept[3], delays[len(delays)-1])
+	}
+}
+
+func TestFocusGhosttyWindow_UsesExactFocusBeforeFallback(t *testing.T) {
+	t.Run("exact success skips fallback", func(t *testing.T) {
+		fallbackCalled := false
+		err := focusGhosttyWindow(
+			123,
+			"com.mitchellh.ghostty",
+			"/tmp/project",
+			func(string) error { return nil },
+			func(int, string, string) error {
+				fallbackCalled = true
+				return nil
+			},
+		)
+		if err != nil {
+			t.Fatalf("focusGhosttyWindow returned error: %v", err)
+		}
+		if fallbackCalled {
+			t.Fatalf("fallback should not run when exact focus succeeds")
+		}
+	})
+
+	t.Run("exact failure falls back", func(t *testing.T) {
+		fallbackCalled := false
+		wantErr := errors.New("fallback failed")
+		err := focusGhosttyWindow(
+			123,
+			"com.mitchellh.ghostty",
+			"/tmp/project",
+			func(string) error { return errors.New("automation denied") },
+			func(gotPID int, gotBundleID, gotCWD string) error {
+				fallbackCalled = true
+				if gotPID != 123 {
+					t.Fatalf("fallback pid = %d, want 123", gotPID)
+				}
+				if gotBundleID != "com.mitchellh.ghostty" {
+					t.Fatalf("fallback bundleID = %q", gotBundleID)
+				}
+				if gotCWD != "/tmp/project" {
+					t.Fatalf("fallback cwd = %q", gotCWD)
+				}
+				return wantErr
+			},
+		)
+		if !fallbackCalled {
+			t.Fatalf("fallback should run when exact focus fails")
+		}
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("focusGhosttyWindow error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestGhosttyFocusCandidates_UsesCleanAndResolvedPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	realRoot := filepath.Join(tempDir, "real")
+	realDir := filepath.Join(realRoot, "project")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll realDir: %v", err)
+	}
+
+	linkRoot := filepath.Join(tempDir, "link")
+	if err := os.Symlink(realRoot, linkRoot); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	input := filepath.Join(linkRoot, ".", "project") + "/"
+	resolvedRealDir, err := filepath.EvalSymlinks(realDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks realDir: %v", err)
+	}
+	got := ghosttyFocusCandidates(input)
+	want := []string{
+		filepath.Clean(input),
+		resolvedRealDir,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ghosttyFocusCandidates(%q) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestTryGhosttyAppleScriptFocus_UsesNormalizedCandidates(t *testing.T) {
+	originalRunner := ghosttyAppleScriptRunner
+	t.Cleanup(func() {
+		ghosttyAppleScriptRunner = originalRunner
+	})
+
+	tempDir := t.TempDir()
+	realRoot := filepath.Join(tempDir, "real")
+	realDir := filepath.Join(realRoot, "project")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll realDir: %v", err)
+	}
+
+	linkRoot := filepath.Join(tempDir, "link")
+	if err := os.Symlink(realRoot, linkRoot); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	input := filepath.Join(linkRoot, ".", "project") + "/"
+	resolvedRealDir, err := filepath.EvalSymlinks(realDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks realDir: %v", err)
+	}
+
+	var gotCandidates []string
+	ghosttyAppleScriptRunner = func(candidates []string) error {
+		gotCandidates = append([]string(nil), candidates...)
+		return nil
+	}
+
+	if err := tryGhosttyAppleScriptFocus(input); err != nil {
+		t.Fatalf("tryGhosttyAppleScriptFocus returned error: %v", err)
+	}
+
+	wantCandidates := []string{
+		filepath.Clean(input),
+		resolvedRealDir,
+	}
+	if !reflect.DeepEqual(gotCandidates, wantCandidates) {
+		t.Fatalf("runner candidates = %#v, want %#v", gotCandidates, wantCandidates)
 	}
 }

@@ -28,7 +28,7 @@ Auto-detects your terminal via `TERM_PROGRAM` / `__CFBundleIdentifier`. Uses `te
 
 | Terminal | Focus method |
 |----------|-------------|
-| Ghostty | AXDocument (OSC 7 CWD) with retry backoff |
+| Ghostty | Exact tab focus via Ghostty AppleScript, with AXDocument retry fallback |
 | VS Code / Insiders / Cursor | AXTitle via focus-window subcommand |
 | iTerm2 | Exact tab/pane targeting via iTerm2 Python API when available, otherwise app-level iTerm activation |
 | Warp, kitty, WezTerm, Alacritty, Hyper, Apple Terminal | AXTitle via focus-window subcommand |

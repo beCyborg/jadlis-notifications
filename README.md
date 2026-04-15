@@ -155,7 +155,7 @@ Clicking a notification activates your terminal window. Auto-detects terminal an
 
 | Terminal | Focus method |
 |----------|-------------|
-| Ghostty | AXDocument (OSC 7 CWD) |
+| Ghostty | Exact tab focus via Ghostty AppleScript, with AXDocument fallback |
 | VS Code / Insiders / Cursor | AXTitle (focus-window subcommand) |
 | iTerm2 | Exact tab/pane targeting via iTerm2 Python API when available, otherwise app-level iTerm activation |
 | Warp, kitty, WezTerm, Alacritty, Hyper, Apple Terminal | AXTitle (focus-window subcommand) |

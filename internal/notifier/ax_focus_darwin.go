@@ -256,16 +256,24 @@ static int raiseWindowByAXTitle(int pid, const char *folderName) {
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 	"unsafe"
 
 	"github.com/777genius/claude-notifications/internal/config"
+	"github.com/777genius/claude-notifications/internal/logging"
 )
 
 const windowFocusRetryAfterRestore = 2
+
+const ghosttyAppleScriptFocusTimeout = 1500 * time.Millisecond
+
+var ghosttyAppleScriptRunner = runGhosttyAppleScriptFocus
 
 // retryWindowFocus calls fn with increasing delays until a non-zero result.
 // Returns 1 (found), -1 (no permission), or 0 (not found after all attempts).
@@ -307,7 +315,9 @@ func retryWindowFocusWithDelays(fn func() int, delays []time.Duration, sleep fun
 }
 
 // FocusAppWindow raises the window matching cwd for the given bundleID app.
-// For Ghostty: activates then matches via AXDocument (OSC 7 file:// URL).
+// For Ghostty: first tries exact terminal/tab focus via AppleScript, then falls
+// back to AXDocument (OSC 7 file:// URL) if Automation is unavailable or no
+// exact terminal match is found.
 // For other apps: uses CGS to find the window across Spaces then raises via AXTitle. macOS only.
 func FocusAppWindow(bundleID, cwd string) error {
 	cBundleID := C.CString(bundleID)
@@ -322,21 +332,7 @@ func FocusAppWindow(bundleID, cwd string) error {
 		if cwd == "" {
 			return fmt.Errorf("invalid cwd: %s", cwd)
 		}
-		C.activateByPID(C.int(pid))
-		fileURL := cwdToFileURL(cwd)
-		cFileURL := C.CString(fileURL)
-		defer C.free(unsafe.Pointer(cFileURL))
-		result := retryWindowFocus(func() C.int {
-			return C.raiseWindowByAXDocument(C.int(pid), cFileURL)
-		})
-		switch {
-		case result < 0:
-			promptAccessibilityOnce()
-			return fmt.Errorf("Accessibility permission required: grant it in System Settings → Privacy & Security → Accessibility, then try again")
-		case result == 0:
-			return fmt.Errorf("window not found for %s (cwd: %s)", bundleID, cwd)
-		}
-		return nil
+		return focusGhosttyWindow(pid, bundleID, cwd, tryGhosttyAppleScriptFocus, focusGhosttyWindowByAXDocument)
 	}
 
 	folderName := filepath.Base(cwd)
@@ -378,6 +374,145 @@ func FocusAppWindow(bundleID, cwd string) error {
 	}
 	return nil
 }
+
+func focusGhosttyWindow(
+	pid int,
+	bundleID, cwd string,
+	exactFocus func(string) error,
+	fallback func(int, string, string) error,
+) error {
+	if err := exactFocus(cwd); err == nil {
+		return nil
+	} else {
+		logging.Debug("Ghostty exact tab focus unavailable, falling back to AXDocument: %v", err)
+	}
+	return fallback(pid, bundleID, cwd)
+}
+
+func tryGhosttyAppleScriptFocus(cwd string) error {
+	candidates := ghosttyFocusCandidates(cwd)
+	if len(candidates) == 0 {
+		return fmt.Errorf("invalid cwd: %s", cwd)
+	}
+	return ghosttyAppleScriptRunner(candidates)
+}
+
+func runGhosttyAppleScriptFocus(candidates []string) error {
+	if len(candidates) == 0 {
+		return fmt.Errorf("no Ghostty cwd candidates")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ghosttyAppleScriptFocusTimeout)
+	defer cancel()
+
+	args := []string{"-e", ghosttyFocusAppleScript, "--"}
+	args = append(args, candidates...)
+
+	output, err := exec.CommandContext(ctx, "/usr/bin/osascript", args...).CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("Ghostty AppleScript timed out after %s", ghosttyAppleScriptFocusTimeout)
+	}
+	if err != nil {
+		outputText := strings.TrimSpace(string(output))
+		if outputText == "" {
+			return fmt.Errorf("Ghostty AppleScript failed: %w", err)
+		}
+		return fmt.Errorf("Ghostty AppleScript failed: %w: %s", err, outputText)
+	}
+	return nil
+}
+
+func ghosttyFocusCandidates(cwd string) []string {
+	seen := make(map[string]struct{}, 2)
+	candidates := make([]string, 0, 2)
+
+	add := func(path string) {
+		normalized := normalizeGhosttyWorkingDir(path)
+		if normalized == "" {
+			return
+		}
+		if _, exists := seen[normalized]; exists {
+			return
+		}
+		seen[normalized] = struct{}{}
+		candidates = append(candidates, normalized)
+	}
+
+	add(cwd)
+	if resolved, err := filepath.EvalSymlinks(cwd); err == nil {
+		add(resolved)
+	}
+
+	return candidates
+}
+
+func normalizeGhosttyWorkingDir(path string) string {
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
+}
+
+func focusGhosttyWindowByAXDocument(pid int, bundleID, cwd string) error {
+	C.activateByPID(C.int(pid))
+
+	for _, candidate := range ghosttyFocusCandidates(cwd) {
+		fileURL := cwdToFileURL(candidate)
+		cFileURL := C.CString(fileURL)
+		result := retryWindowFocus(func() C.int {
+			return C.raiseWindowByAXDocument(C.int(pid), cFileURL)
+		})
+		C.free(unsafe.Pointer(cFileURL))
+
+		switch {
+		case result < 0:
+			promptAccessibilityOnce()
+			return fmt.Errorf("Accessibility permission required: grant it in System Settings → Privacy & Security → Accessibility, then try again")
+		case result != 0:
+			return nil
+		}
+	}
+
+	return fmt.Errorf("window not found for %s (cwd: %s)", bundleID, cwd)
+}
+
+const ghosttyFocusAppleScript = `
+on normalizePath(thePath)
+	if thePath is "/" then
+		return "/"
+	end if
+	if thePath ends with "/" then
+		return text 1 thru -2 of thePath
+	end if
+	return thePath
+end normalizePath
+
+on focusMatchingTerminal(searchPaths)
+	tell application "Ghostty"
+		set allTerminals to terminals
+		repeat with candidate in searchPaths
+			set normalizedCandidate to my normalizePath(contents of candidate)
+			repeat with t in allTerminals
+				try
+					set termDir to my normalizePath(working directory of t)
+					if termDir is normalizedCandidate then
+						focus t
+						return true
+					end if
+				end try
+			end repeat
+		end repeat
+	end tell
+	return false
+end focusMatchingTerminal
+
+on run argv
+	if my focusMatchingTerminal(argv) then
+		return
+	end if
+	error "ghostty terminal not found" number 1001
+end run
+`
 
 // promptScreenRecordingOnce sends a one-time notification explaining why Screen
 // Recording access is needed. Clicking the notification opens the settings pane.
