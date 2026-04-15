@@ -832,12 +832,16 @@ test_mock_checksum_mismatch() {
     local binary_name=$(get_binary_name)
 
     cp "$FIXTURES_DIR/mock_binary" "$FIXTURES_DIR/$binary_name"
-
-    # Create checksums with WRONG checksum
-    echo "0000000000000000000000000000000000000000000000000000000000000000  $binary_name" > "$FIXTURES_DIR/checksums.txt"
+    local checksum
+    if command -v shasum &>/dev/null; then
+        checksum=$(shasum -a 256 "$FIXTURES_DIR/$binary_name" | awk '{print $1}')
+    else
+        checksum=$(sha256sum "$FIXTURES_DIR/$binary_name" | awk '{print $1}')
+    fi
+    echo "$checksum  $binary_name" > "$FIXTURES_DIR/checksums.txt"
 
     set +e
-    output=$(RELEASE_URL="http://localhost:$MOCK_PORT" \
+    output=$(RELEASE_URL="http://localhost:$MOCK_PORT/wrong-checksum" \
              CHECKSUMS_URL="http://localhost:$MOCK_PORT/checksums.txt" \
              INSTALL_TARGET_DIR="$TEST_DIR" \
              run_with_timeout 30 bash "$INSTALL_SCRIPT" 2>&1)
@@ -848,6 +852,139 @@ test_mock_checksum_mismatch() {
     assert_exit_code 1 $exit_code "Exit code is 1 on checksum mismatch"
 
     rm -f "$FIXTURES_DIR/$binary_name"
+
+    stop_mock_server
+    cleanup_test_dir
+}
+
+test_mock_partial_download_reports_transport_error() {
+    echo -e "\n${CYAN}▶ test_mock_partial_download_reports_transport_error${NC}"
+
+    if ! command -v python3 &>/dev/null; then
+        skip_test "Partial download" "python3 not available"
+        return
+    fi
+
+    setup_test_dir
+    start_mock_server $MOCK_PORT || { skip_test "Partial download" "mock server failed"; return; }
+
+    local binary_name=$(get_binary_name)
+
+    cp "$FIXTURES_DIR/mock_binary" "$FIXTURES_DIR/$binary_name"
+
+    local checksum
+    if command -v shasum &>/dev/null; then
+        checksum=$(shasum -a 256 "$FIXTURES_DIR/$binary_name" | awk '{print $1}')
+    else
+        checksum=$(sha256sum "$FIXTURES_DIR/$binary_name" | awk '{print $1}')
+    fi
+    echo "$checksum  $binary_name" > "$FIXTURES_DIR/checksums.txt"
+
+    set +e
+    output=$(RELEASE_URL="http://localhost:$MOCK_PORT/partial-close" \
+             CHECKSUMS_URL="http://localhost:$MOCK_PORT/checksums.txt" \
+             NOTIFIER_URL="http://localhost:$MOCK_PORT/valid.zip" \
+             INSTALL_TARGET_DIR="$TEST_DIR" \
+             run_with_timeout 30 bash "$INSTALL_SCRIPT" 2>&1)
+    exit_code=$?
+    set -e
+
+    assert_contains "$output" "interrupted mid-download|Download failed|Installation Failed" "Partial transfer reported as download failure"
+    assert_not_contains "$output" "Checksum mismatch" "Partial transfer does not degrade into checksum mismatch"
+    assert_exit_code 1 $exit_code "Exit code is 1 on partial download"
+
+    rm -f "$FIXTURES_DIR/$binary_name"
+
+    stop_mock_server
+    cleanup_test_dir
+}
+
+test_mock_wrong_payload_recovers_after_retry() {
+    echo -e "\n${CYAN}▶ test_mock_wrong_payload_recovers_after_retry${NC}"
+
+    if ! command -v python3 &>/dev/null; then
+        skip_test "Wrong payload retry" "python3 not available"
+        return
+    fi
+
+    setup_test_dir
+    start_mock_server $MOCK_PORT || { skip_test "Wrong payload retry" "mock server failed"; return; }
+
+    local binary_name=$(get_binary_name)
+
+    cp "$FIXTURES_DIR/mock_binary" "$FIXTURES_DIR/$binary_name"
+
+    local checksum
+    if command -v shasum &>/dev/null; then
+        checksum=$(shasum -a 256 "$FIXTURES_DIR/$binary_name" | awk '{print $1}')
+    else
+        checksum=$(sha256sum "$FIXTURES_DIR/$binary_name" | awk '{print $1}')
+    fi
+    echo "$checksum  $binary_name" > "$FIXTURES_DIR/checksums.txt"
+
+    set +e
+    output=$(RELEASE_URL="http://localhost:$MOCK_PORT/wrong-then-ok" \
+             CHECKSUMS_URL="http://localhost:$MOCK_PORT/checksums.txt" \
+             NOTIFIER_URL="http://localhost:$MOCK_PORT/valid.zip" \
+             INSTALL_TARGET_DIR="$TEST_DIR" \
+             run_with_timeout 60 bash "$INSTALL_SCRIPT" 2>&1)
+    exit_code=$?
+    set -e
+
+    assert_contains "$output" "Payload looks like text instead of a raw executable|Detected payload" "Installer explains the unexpected payload"
+    assert_contains "$output" "Verification failed, retrying with a fresh download" "Installer retries after checksum failure"
+    assert_contains "$output" "Checksum verified|Installation Complete" "Retry eventually succeeds"
+    assert_exit_code 0 $exit_code "Exit code is 0 after recovering from wrong payload"
+    assert_file_exists "$TEST_DIR/$binary_name" "Recovered binary installed"
+
+    rm -f "$FIXTURES_DIR/$binary_name"
+
+    stop_mock_server
+    cleanup_test_dir
+}
+
+test_mock_pin_latest_to_exact_tag() {
+    echo -e "\n${CYAN}▶ test_mock_pin_latest_to_exact_tag${NC}"
+
+    if ! command -v python3 &>/dev/null; then
+        skip_test "Pin latest release" "python3 not available"
+        return
+    fi
+
+    setup_test_dir
+    export MOCK_LATEST_TAG="v-test.1"
+    start_mock_server $MOCK_PORT || { unset MOCK_LATEST_TAG; skip_test "Pin latest release" "mock server failed"; return; }
+
+    local binary_name=$(get_binary_name)
+    local pinned_dir="$FIXTURES_DIR/download/$MOCK_LATEST_TAG"
+    mkdir -p "$pinned_dir"
+    cp "$FIXTURES_DIR/mock_binary" "$pinned_dir/$binary_name"
+
+    local checksum
+    if command -v shasum &>/dev/null; then
+        checksum=$(shasum -a 256 "$pinned_dir/$binary_name" | awk '{print $1}')
+    else
+        checksum=$(sha256sum "$pinned_dir/$binary_name" | awk '{print $1}')
+    fi
+    echo "$checksum  $binary_name" > "$pinned_dir/checksums.txt"
+
+    set +e
+    output=$(SKIP_CONNECTIVITY_CHECK=true \
+             RELEASES_BASE_URL="http://localhost:$MOCK_PORT" \
+             LATEST_RELEASE_API_URL="http://localhost:$MOCK_PORT/api/latest" \
+             MODERN_NOTIFIER_URL="http://localhost:$MOCK_PORT/valid.zip" \
+             INSTALL_TARGET_DIR="$TEST_DIR" \
+             run_with_timeout 60 bash "$INSTALL_SCRIPT" 2>&1)
+    exit_code=$?
+    set -e
+
+    assert_contains "$output" "Release:.*$MOCK_LATEST_TAG" "Installer resolves latest to a concrete tag"
+    assert_contains "$output" "From: http://localhost:$MOCK_PORT/download/$MOCK_LATEST_TAG/$binary_name" "Pinned download URL is used"
+    assert_exit_code 0 $exit_code "Install succeeds with pinned release tag"
+    assert_file_exists "$TEST_DIR/$binary_name" "Pinned release binary downloaded"
+
+    rm -rf "$FIXTURES_DIR/download"
+    unset MOCK_LATEST_TAG
 
     stop_mock_server
     cleanup_test_dir
@@ -883,6 +1020,7 @@ test_mock_zip_corrupted() {
 
     output=$(RELEASE_URL="http://localhost:$MOCK_PORT" \
              CHECKSUMS_URL="http://localhost:$MOCK_PORT/checksums.txt" \
+             MODERN_NOTIFIER_URL="http://localhost:$MOCK_PORT/corrupted.zip" \
              NOTIFIER_URL="http://localhost:$MOCK_PORT/corrupted.zip" \
              INSTALL_TARGET_DIR="$TEST_DIR" \
              run_with_timeout 30 bash "$INSTALL_SCRIPT" 2>&1 || true)
@@ -1659,6 +1797,9 @@ main() {
     test_mock_download_500
     test_mock_file_too_small
     test_mock_checksum_mismatch
+    test_mock_partial_download_reports_transport_error
+    test_mock_wrong_payload_recovers_after_retry
+    test_mock_pin_latest_to_exact_tag
     test_mock_zip_corrupted
 
     if [ "$RUN_MOCK_ONLY" != true ]; then

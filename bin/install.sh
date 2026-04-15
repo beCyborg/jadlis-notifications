@@ -38,11 +38,17 @@ CURL_COMPAT_OPTS=()
 
 # GitHub repository (can be overridden via env for testing)
 REPO="777genius/claude-notifications-go"
-RELEASE_URL="${RELEASE_URL:-https://github.com/${REPO}/releases/latest/download}"
-CHECKSUMS_URL="${CHECKSUMS_URL:-${RELEASE_URL}/checksums.txt}"
+RELEASES_BASE_URL="${RELEASES_BASE_URL:-https://github.com/${REPO}/releases}"
+LATEST_RELEASE_API_URL="${LATEST_RELEASE_API_URL:-https://api.github.com/repos/${REPO}/releases/latest}"
+DEFAULT_RELEASE_URL="${RELEASES_BASE_URL}/latest/download"
+DEFAULT_CHECKSUMS_URL="${DEFAULT_RELEASE_URL}/checksums.txt"
+DEFAULT_MODERN_NOTIFIER_URL="${DEFAULT_RELEASE_URL}/ClaudeNotifier.app.zip"
+RELEASE_URL="${RELEASE_URL:-${DEFAULT_RELEASE_URL}}"
+CHECKSUMS_URL="${CHECKSUMS_URL:-${DEFAULT_CHECKSUMS_URL}}"
 # ClaudeNotifier.app is built, signed with Developer ID, and notarized in CI.
 # It ships alongside Go binaries in each release.
-MODERN_NOTIFIER_URL="${MODERN_NOTIFIER_URL:-${RELEASE_URL}/ClaudeNotifier.app.zip}"
+MODERN_NOTIFIER_URL="${MODERN_NOTIFIER_URL:-${DEFAULT_MODERN_NOTIFIER_URL}}"
+PINNED_RELEASE_TAG=""
 
 # Parse command line arguments
 FORCE_UPDATE=false
@@ -208,14 +214,14 @@ print_curl_failure_guidance() {
         7)
             echo -e "${YELLOW}→ Connection to the release host failed. Check firewall, proxy, or antivirus settings.${NC}" >&2
             ;;
+        18|56)
+            echo -e "${YELLOW}→ The connection was interrupted mid-download. A proxy or TLS filter may be interfering.${NC}" >&2
+            ;;
         28)
             echo -e "${YELLOW}→ Connection timed out. GitHub may be slow or blocked from this network.${NC}" >&2
             ;;
         35|51|58|60|77)
             echo -e "${YELLOW}→ TLS/certificate validation failed while contacting GitHub Releases.${NC}" >&2
-            ;;
-        56)
-            echo -e "${YELLOW}→ The connection was interrupted mid-download. A proxy or TLS filter may be interfering.${NC}" >&2
             ;;
         92)
             echo -e "${YELLOW}→ HTTP/2 transport failed. The installer retried with HTTP/1.1 compatibility mode.${NC}" >&2
@@ -362,6 +368,131 @@ get_file_size() {
 
     # Fallback to wc -c (universal)
     wc -c < "$file" 2>/dev/null || echo "0"
+}
+
+fetch_url_to_stdout() {
+    local url="$1"
+
+    if command -v curl &>/dev/null; then
+        curl -fsSL "${CURL_EXTRA_OPTS[@]}" --connect-timeout "$CONNECT_TIMEOUT" --max-time "$CURL_TIMEOUT" "$url" 2>/dev/null
+        return $?
+    fi
+
+    if command -v wget &>/dev/null; then
+        wget -qO- "$url" 2>/dev/null
+        return $?
+    fi
+
+    return 1
+}
+
+get_latest_release_tag() {
+    local response=""
+    local tag=""
+
+    response=$(fetch_url_to_stdout "$LATEST_RELEASE_API_URL") || return 1
+    tag=$(printf '%s\n' "$response" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+
+    [ -n "$tag" ] || return 1
+    printf '%s\n' "$tag"
+}
+
+pin_release_urls() {
+    [ "$RELEASE_URL" = "$DEFAULT_RELEASE_URL" ] || return 0
+
+    local tag=""
+    tag=$(get_latest_release_tag || true)
+
+    if [ -z "$tag" ]; then
+        echo -e "${YELLOW}⚠ Could not resolve latest release tag, using /releases/latest fallback${NC}"
+        return 0
+    fi
+
+    PINNED_RELEASE_TAG="$tag"
+    RELEASE_URL="${RELEASES_BASE_URL}/download/${PINNED_RELEASE_TAG}"
+
+    if [ "$CHECKSUMS_URL" = "$DEFAULT_CHECKSUMS_URL" ]; then
+        CHECKSUMS_URL="${RELEASE_URL}/checksums.txt"
+    fi
+
+    if [ "$MODERN_NOTIFIER_URL" = "$DEFAULT_MODERN_NOTIFIER_URL" ]; then
+        MODERN_NOTIFIER_URL="${RELEASE_URL}/ClaudeNotifier.app.zip"
+    fi
+
+    echo -e "${BLUE}Release:${NC}  ${PINNED_RELEASE_TAG}"
+}
+
+get_file_magic_hex() {
+    if command -v od &>/dev/null; then
+        od -An -tx1 -N 16 "$1" 2>/dev/null | tr -d ' \n'
+    fi
+}
+
+get_payload_text_sample() {
+    LC_ALL=C head -c 256 "$1" 2>/dev/null | tr '\000' ' ' | tr '\r' '\n'
+}
+
+print_unexpected_payload_diagnostics() {
+    local file="$1"
+    local magic=""
+    local sample=""
+    local file_desc=""
+
+    [ -f "$file" ] || return 0
+
+    magic=$(get_file_magic_hex "$file")
+    sample=$(get_payload_text_sample "$file")
+
+    if command -v file &>/dev/null; then
+        file_desc=$(file -b "$file" 2>/dev/null || true)
+    fi
+
+    if [ -n "$file_desc" ]; then
+        echo -e "${YELLOW}Detected payload:${NC} ${file_desc}" >&2
+    fi
+
+    case "$magic" in
+        1f8b08*)
+            echo -e "${YELLOW}→ Payload looks like gzip-compressed data, not a raw executable. A proxy/CDN may have re-encoded the binary in transit.${NC}" >&2
+            return 0
+            ;;
+        504b0304*|504b0506*|504b0708*)
+            echo -e "${YELLOW}→ Payload looks like a ZIP archive instead of the requested raw executable.${NC}" >&2
+            return 0
+            ;;
+        7f454c46*)
+            if [ "$PLATFORM" = "darwin" ] || [ "$PLATFORM" = "windows" ]; then
+                echo -e "${YELLOW}→ Payload is a Linux ELF executable, which suggests the wrong asset or a bad cache response was returned.${NC}" >&2
+            fi
+            return 0
+            ;;
+        4d5a*)
+            if [ "$PLATFORM" != "windows" ]; then
+                echo -e "${YELLOW}→ Payload is a Windows PE executable, which suggests the wrong asset or a bad cache response was returned.${NC}" >&2
+            fi
+            return 0
+            ;;
+        cffaedfe*|cefaedfe*|feedfacf*|cafebabe*)
+            if [ "$PLATFORM" != "darwin" ]; then
+                echo -e "${YELLOW}→ Payload is a macOS Mach-O executable, which suggests the wrong asset or a bad cache response was returned.${NC}" >&2
+            fi
+            return 0
+            ;;
+    esac
+
+    if printf '%s\n' "$sample" | grep -qiE '<!doctype|<html|<head|<body'; then
+        echo -e "${YELLOW}→ Payload looks like an HTML page. A proxy/login page/CDN error likely replaced the binary.${NC}" >&2
+        return 0
+    fi
+
+    if printf '%s\n' "$sample" | grep -qiE '^[[:space:]]*[{[]|\"message\"|\"error\"'; then
+        echo -e "${YELLOW}→ Payload looks like JSON/text instead of a raw executable. The release endpoint may be returning an API or error response.${NC}" >&2
+        return 0
+    fi
+
+    if [ -n "$file_desc" ] && printf '%s\n' "$file_desc" | grep -qiE 'text|ascii|unicode'; then
+        echo -e "${YELLOW}→ Payload looks like text instead of a raw executable.${NC}" >&2
+    fi
 }
 
 # Check if GitHub is accessible
@@ -563,7 +694,7 @@ download_binary() {
         http_code=$(curl -w "%{http_code}" -fL "${CURL_EXTRA_OPTS[@]}" --connect-timeout "$CONNECT_TIMEOUT" --progress-bar --max-time "$CURL_TIMEOUT" \
             "$url" -o "$BINARY_PATH" 2>"$error_log") || curl_exit_code=$?
 
-        if [ -f "$BINARY_PATH" ] && [ "$(get_file_size "$BINARY_PATH")" -gt 100000 ]; then
+        if [ "$curl_exit_code" -eq 0 ] && [ -f "$BINARY_PATH" ] && [ "$(get_file_size "$BINARY_PATH")" -gt 100000 ]; then
             rm -f "$error_log"
             echo ""
             return 0
@@ -576,7 +707,7 @@ download_binary() {
         fi
 
         case "$curl_exit_code" in
-            5|6|7|28|35|52|56|60|77|92)
+            5|6|7|18|28|35|52|56|60|77|92)
                 should_retry=true
                 ;;
         esac
@@ -593,7 +724,7 @@ download_binary() {
             http_code=$(curl -w "%{http_code}" -fL "${CURL_EXTRA_OPTS[@]}" "${CURL_COMPAT_OPTS[@]}" --connect-timeout "$CONNECT_TIMEOUT" -sS --max-time "$CURL_TIMEOUT" \
                 "$url" -o "$BINARY_PATH" 2>"$error_log") || curl_exit_code=$?
 
-            if [ -f "$BINARY_PATH" ] && [ "$(get_file_size "$BINARY_PATH")" -gt 100000 ]; then
+            if [ "$curl_exit_code" -eq 0 ] && [ -f "$BINARY_PATH" ] && [ "$(get_file_size "$BINARY_PATH")" -gt 100000 ]; then
                 rm -f "$error_log"
                 echo ""
                 return 0
@@ -711,6 +842,7 @@ verify_checksum() {
         echo -e "${RED}✗ Checksum mismatch!${NC}" >&2
         echo -e "${RED}  Expected: ${expected_sum}${NC}" >&2
         echo -e "${RED}  Got:      ${actual_sum}${NC}" >&2
+        print_unexpected_payload_diagnostics "$BINARY_PATH"
         echo -e "${YELLOW}The downloaded file may be corrupted. Try again.${NC}" >&2
         rm -f "$BINARY_PATH"
         return 1
@@ -730,6 +862,7 @@ verify_binary() {
     if [ "$size" -lt 1000000 ]; then
         echo -e "${RED}✗ Downloaded file too small (${size} bytes)${NC}" >&2
         echo -e "${YELLOW}This might be an error page. Check your internet connection.${NC}" >&2
+        print_unexpected_payload_diagnostics "$BINARY_PATH"
         rm -f "$BINARY_PATH"
         return 1
     fi
@@ -742,6 +875,41 @@ verify_binary() {
     fi
 
     return 0
+}
+
+# Download and verify the main binary. Retry when verification fails after a
+# nominally successful download, which can happen when a proxy/CDN returns an
+# unexpected payload with HTTP 200.
+download_and_verify_binary() {
+    local attempt=1
+
+    while [ $attempt -le $MAX_RETRIES ]; do
+        if [ $attempt -gt 1 ]; then
+            echo -e "${YELLOW}Retry ${attempt}/${MAX_RETRIES} after ${RETRY_DELAY}s (fresh download)...${NC}"
+            sleep $RETRY_DELAY
+        fi
+
+        download_checksums || true
+
+        if ! download_binary; then
+            return 1
+        fi
+
+        if verify_binary; then
+            return 0
+        fi
+
+        rm -f "$BINARY_PATH"
+
+        if [ $attempt -lt $MAX_RETRIES ]; then
+            echo -e "${YELLOW}⚠ Verification failed, retrying with a fresh download...${NC}"
+            echo ""
+        fi
+
+        attempt=$((attempt + 1))
+    done
+
+    return 1
 }
 
 # Verify binary actually executes
@@ -1404,11 +1572,10 @@ main() {
         return 0
     fi
 
-    # Download checksums (optional - failure is not fatal)
-    download_checksums || true
+    pin_release_urls
 
-    # Download
-    if ! download_binary; then
+    # Download and verify the main binary.
+    if ! download_and_verify_binary; then
         cleanup
         echo ""
         echo -e "${RED}========================================${NC}"
@@ -1422,17 +1589,6 @@ main() {
         if [ "$PLATFORM" = "windows" ]; then
             echo -e "  4. Check proxy / TLS inspection settings in Git Bash or your corporate network"
         fi
-        echo ""
-        exit 1
-    fi
-
-    # Verify size and checksum
-    if ! verify_binary; then
-        cleanup
-        echo ""
-        echo -e "${RED}========================================${NC}"
-        echo -e "${RED} Verification Failed${NC}"
-        echo -e "${RED}========================================${NC}"
         echo ""
         exit 1
     fi
