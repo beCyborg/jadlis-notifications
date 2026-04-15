@@ -5,6 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,6 +48,44 @@ func newTestConfig(url string) *config.Config {
 			"question":      {Title: "Question"},
 		},
 	}
+}
+
+func createGitRepoForWebhookTests(t *testing.T) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	if err := runGitCommand(tmpDir, "init"); err != nil {
+		t.Skipf("git not available: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "config", "user.email", "webhook@test.com"); err != nil {
+		t.Fatalf("git config user.email failed: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "config", "user.name", "Webhook Tester"); err != nil {
+		t.Fatalf("git config user.name failed: %v", err)
+	}
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "add", "."); err != nil {
+		t.Fatalf("git add failed: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "commit", "-m", "initial"); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "branch", "-M", "webhook-tests"); err != nil {
+		t.Fatalf("git branch rename failed: %v", err)
+	}
+
+	return tmpDir
+}
+
+func runGitCommand(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return cmd.Run()
 }
 
 func TestSenderSendSuccess(t *testing.T) {
@@ -313,6 +354,179 @@ func TestSenderSendCustomHeaders(t *testing.T) {
 	}
 	if receivedHeaders.Get("X-Request-ID") == "" {
 		t.Error("X-Request-ID not set")
+	}
+}
+
+func TestSenderSendTemplatedHeaders(t *testing.T) {
+	var receivedHeaders http.Header
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	repoDir := createGitRepoForWebhookTests(t)
+	t.Setenv("WEBHOOK_TOKEN", "secret-token")
+
+	cfg := newTestConfig(server.URL)
+	cfg.Notifications.Webhook.Headers = map[string]string{
+		"Authorization": "Bearer ${{env.WEBHOOK_TOKEN}}",
+		"X-Git-Email":   "${{git.user.email}}",
+		"X-Branch":      "${{git.branch}}",
+	}
+	sender := New(cfg)
+
+	err := sender.SendWithContext(SendContext{
+		Status:    analyzer.StatusTaskComplete,
+		Message:   "Test",
+		SessionID: "session-123",
+		CWD:       repoDir,
+	})
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	if receivedHeaders.Get("Authorization") != "Bearer secret-token" {
+		t.Errorf("Authorization header = %q, want %q", receivedHeaders.Get("Authorization"), "Bearer secret-token")
+	}
+	if receivedHeaders.Get("X-Git-Email") != "webhook@test.com" {
+		t.Errorf("X-Git-Email = %q, want %q", receivedHeaders.Get("X-Git-Email"), "webhook@test.com")
+	}
+	if receivedHeaders.Get("X-Branch") != "webhook-tests" {
+		t.Errorf("X-Branch = %q, want %q", receivedHeaders.Get("X-Branch"), "webhook-tests")
+	}
+}
+
+func TestSenderSendLegacyTemplateSyntaxIsLiteral(t *testing.T) {
+	var receivedHeaders http.Header
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	repoDir := createGitRepoForWebhookTests(t)
+
+	cfg := newTestConfig(server.URL)
+	cfg.Notifications.Webhook.Headers = map[string]string{
+		"X-Legacy": "{{git.branch}}",
+	}
+	sender := New(cfg)
+
+	err := sender.SendWithContext(SendContext{
+		Status:    analyzer.StatusTaskComplete,
+		Message:   "Test",
+		SessionID: "session-123",
+		CWD:       repoDir,
+	})
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	if receivedHeaders.Get("X-Legacy") != "{{git.branch}}" {
+		t.Errorf("X-Legacy = %q, want literal %q", receivedHeaders.Get("X-Legacy"), "{{git.branch}}")
+	}
+}
+
+func TestSenderSendPayloadFields(t *testing.T) {
+	var receivedPayload map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	repoDir := createGitRepoForWebhookTests(t)
+	t.Setenv("DEPLOY_ENV", "staging")
+
+	cfg := newTestConfig(server.URL)
+	cfg.Notifications.Webhook.PayloadFields = map[string]interface{}{
+		"context": map[string]interface{}{
+			"git": map[string]interface{}{
+				"userEmail": "${{git.user.email}}",
+				"branch":    "${{git.branch}}",
+			},
+			"env": "${{env.DEPLOY_ENV}}",
+		},
+		"sent_at_unix": "${{time.unix}}",
+		"session_name": "${{session_name}}",
+	}
+	sender := New(cfg)
+
+	err := sender.SendWithContext(SendContext{
+		Status:    analyzer.StatusTaskComplete,
+		Message:   "Payload test",
+		SessionID: "session-123",
+		CWD:       repoDir,
+	})
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	contextMap, ok := receivedPayload["context"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected context payload field, got %T", receivedPayload["context"])
+	}
+
+	gitMap, ok := contextMap["git"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected context.git map, got %T", contextMap["git"])
+	}
+	if gitMap["userEmail"] != "webhook@test.com" {
+		t.Errorf("context.git.userEmail = %v, want %q", gitMap["userEmail"], "webhook@test.com")
+	}
+	if gitMap["branch"] != "webhook-tests" {
+		t.Errorf("context.git.branch = %v, want %q", gitMap["branch"], "webhook-tests")
+	}
+	if contextMap["env"] != "staging" {
+		t.Errorf("context.env = %v, want %q", contextMap["env"], "staging")
+	}
+
+	if _, ok := receivedPayload["sent_at_unix"].(float64); !ok {
+		t.Errorf("sent_at_unix should be numeric, got %T", receivedPayload["sent_at_unix"])
+	}
+	if receivedPayload["session_name"] == "" {
+		t.Error("session_name should not be empty")
+	}
+}
+
+func TestSenderSendPayloadFieldsSkipUnavailableValues(t *testing.T) {
+	var receivedPayload map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := newTestConfig(server.URL)
+	cfg.Notifications.Webhook.PayloadFields = map[string]interface{}{
+		"missing_env": "${{env.DOES_NOT_EXIST}}",
+		"context": map[string]interface{}{
+			"still_here": "yes",
+		},
+	}
+	sender := New(cfg)
+
+	err := sender.SendWithContext(SendContext{
+		Status:    analyzer.StatusTaskComplete,
+		Message:   "Payload test",
+		SessionID: "session-123",
+	})
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	if _, exists := receivedPayload["missing_env"]; exists {
+		t.Error("missing_env should be omitted when template value is unavailable")
+	}
+	if receivedPayload["context"] == nil {
+		t.Error("context should still be present")
 	}
 }
 

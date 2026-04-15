@@ -48,6 +48,7 @@ Choose your platform for detailed setup instructions:
 
 - **Platform presets**: Pre-configured formatting for Slack, Discord, and Telegram
 - **Custom endpoints**: Support for any webhook-compatible service
+- **Dynamic fields**: Add runtime values to headers and JSON payloads via templates
 - **Retry mechanism**: Exponential backoff with jitter (1-3 attempts)
 - **Circuit breaker**: Automatic failure detection and recovery
 - **Rate limiting**: Token bucket algorithm to prevent API overload

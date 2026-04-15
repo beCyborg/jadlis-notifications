@@ -642,7 +642,8 @@ PLAN_READY_PATH=$(get_sound_path "$user_answer_4")
       "url": "<placeholder - user must edit>",
       "chat_id": "<for telegram only>",
       "format": "json",
-      "headers": {}
+      "headers": {},
+      "payloadFields": {}
     },
     "suppressQuestionAfterTaskCompleteSeconds": 7
   },

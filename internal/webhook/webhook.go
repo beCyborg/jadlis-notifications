@@ -86,8 +86,17 @@ func New(cfg *config.Config) *Sender {
 	}
 }
 
-// Send sends a webhook notification with full professional stack
+// Send sends a webhook notification with full professional stack.
 func (s *Sender) Send(status analyzer.Status, message, sessionID string) error {
+	return s.SendWithContext(SendContext{
+		Status:    status,
+		Message:   message,
+		SessionID: sessionID,
+	})
+}
+
+// SendWithContext sends a webhook notification with optional runtime context.
+func (s *Sender) SendWithContext(sendCtx SendContext) error {
 	if !s.cfg.IsWebhookEnabled() {
 		logging.Debug("Webhooks disabled, skipping")
 		return nil
@@ -115,7 +124,7 @@ func (s *Sender) Send(status analyzer.Status, message, sessionID string) error {
 	start := time.Now()
 
 	// Execute with retry and circuit breaker
-	err := s.sendWithRetryAndCircuitBreaker(requestID, status, message, sessionID)
+	err := s.sendWithRetryAndCircuitBreaker(requestID, sendCtx)
 
 	// Record result
 	latency := time.Since(start)
@@ -123,7 +132,7 @@ func (s *Sender) Send(status analyzer.Status, message, sessionID string) error {
 		s.metrics.RecordFailure()
 		logging.Error("[%s] Webhook failed after retries: %v (latency: %v)", requestID, err, latency)
 	} else {
-		s.metrics.RecordSuccess(status, latency)
+		s.metrics.RecordSuccess(sendCtx.Status, latency)
 		logging.Info("[%s] Webhook sent successfully (latency: %v)", requestID, latency)
 	}
 
@@ -136,14 +145,18 @@ func (s *Sender) Send(status analyzer.Status, message, sessionID string) error {
 }
 
 // sendWithRetryAndCircuitBreaker executes the webhook with retry and circuit breaker
-func (s *Sender) sendWithRetryAndCircuitBreaker(requestID string, status analyzer.Status, message, sessionID string) error {
+func (s *Sender) sendWithRetryAndCircuitBreaker(requestID string, sendCtx SendContext) error {
 	webhookCfg := s.cfg.Notifications.Webhook
+	statusInfo, _ := s.cfg.GetStatusInfo(string(sendCtx.Status))
+	runtimeCtx := newRuntimeContext(sendCtx, statusInfo)
 
 	// Build payload
-	payload, contentType, err := s.buildPayload(status, message, sessionID)
+	payload, contentType, err := s.buildPayload(runtimeCtx)
 	if err != nil {
 		return fmt.Errorf("failed to build payload: %w", err)
 	}
+
+	headers := runtimeCtx.resolveHeaders(webhookCfg.Headers)
 
 	// Validate URL
 	if err := validateURL(webhookCfg.URL); err != nil {
@@ -152,7 +165,7 @@ func (s *Sender) sendWithRetryAndCircuitBreaker(requestID string, status analyze
 
 	// Create request function for retry
 	sendFn := func(ctx context.Context) error {
-		return s.sendHTTPRequest(ctx, requestID, webhookCfg.URL, payload, contentType, webhookCfg.Headers)
+		return s.sendHTTPRequest(ctx, requestID, webhookCfg.URL, payload, contentType, headers)
 	}
 
 	// Execute with circuit breaker and retry
@@ -171,14 +184,19 @@ func (s *Sender) sendWithRetryAndCircuitBreaker(requestID string, status analyze
 	return executeErr
 }
 
-// buildPayload builds the webhook payload based on preset
-func (s *Sender) buildPayload(status analyzer.Status, message, sessionID string) ([]byte, string, error) {
+// buildPayload builds the webhook payload based on preset.
+func (s *Sender) buildPayload(runtimeCtx *runtimeContext) ([]byte, string, error) {
 	webhookCfg := s.cfg.Notifications.Webhook
-	statusInfo, _ := s.cfg.GetStatusInfo(string(status))
+	sendCtx := runtimeCtx.sendCtx
+	statusInfo := runtimeCtx.statusInfo
 
 	// Use formatter if available
 	if formatter, ok := s.formatters[webhookCfg.Preset]; ok {
-		payload, err := formatter.Format(status, message, sessionID, statusInfo)
+		payload, err := formatter.Format(sendCtx.Status, sendCtx.Message, sendCtx.SessionID, statusInfo)
+		if err != nil {
+			return nil, "", err
+		}
+		payload, err = s.applyPayloadFields(payload, runtimeCtx)
 		if err != nil {
 			return nil, "", err
 		}
@@ -187,28 +205,53 @@ func (s *Sender) buildPayload(status analyzer.Status, message, sessionID string)
 	}
 
 	// Fallback to custom format
-	return s.buildCustomPayload(status, message, sessionID, webhookCfg.Format, statusInfo)
+	return s.buildCustomPayload(runtimeCtx, webhookCfg.Format)
 }
 
 // buildCustomPayload builds a custom webhook payload
-func (s *Sender) buildCustomPayload(status analyzer.Status, message, sessionID, format string, statusInfo config.StatusInfo) ([]byte, string, error) {
+func (s *Sender) buildCustomPayload(runtimeCtx *runtimeContext, format string) ([]byte, string, error) {
+	sendCtx := runtimeCtx.sendCtx
+
 	if format == "text" {
-		text := fmt.Sprintf("[%s] %s", status, message)
+		text := fmt.Sprintf("[%s] %s", sendCtx.Status, sendCtx.Message)
 		return []byte(text), "text/plain", nil
 	}
 
 	// JSON format
 	payload := map[string]interface{}{
-		"status":     string(status),
-		"message":    message,
-		"timestamp":  time.Now().Format(time.RFC3339),
-		"session_id": sessionID,
+		"status":     string(sendCtx.Status),
+		"message":    sendCtx.Message,
+		"timestamp":  runtimeCtx.now.Format(time.RFC3339),
+		"session_id": sendCtx.SessionID,
 		"source":     "claude-notifications",
-		"title":      statusInfo.Title,
+		"title":      runtimeCtx.statusInfo.Title,
 	}
 
-	data, err := json.Marshal(payload)
+	payloadWithFields, err := s.applyPayloadFields(payload, runtimeCtx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	data, err := json.Marshal(payloadWithFields)
 	return data, "application/json", err
+}
+
+func (s *Sender) applyPayloadFields(base interface{}, runtimeCtx *runtimeContext) (interface{}, error) {
+	extraFields, err := runtimeCtx.resolvePayloadFields(s.cfg.Notifications.Webhook.PayloadFields)
+	if err != nil {
+		return nil, err
+	}
+	if len(extraFields) == 0 {
+		return base, nil
+	}
+
+	baseMap, ok := base.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("payloadFields are only supported for JSON webhook payloads")
+	}
+
+	mergePayloadMaps(baseMap, extraFields)
+	return baseMap, nil
 }
 
 // sendHTTPRequest sends the actual HTTP request
@@ -246,14 +289,23 @@ func (s *Sender) sendHTTPRequest(ctx context.Context, requestID, url string, pay
 	return nil
 }
 
-// SendAsync sends a webhook asynchronously with graceful shutdown support
+// SendAsync sends a webhook asynchronously with graceful shutdown support.
 func (s *Sender) SendAsync(status analyzer.Status, message, sessionID string) {
+	s.SendAsyncWithContext(SendContext{
+		Status:    status,
+		Message:   message,
+		SessionID: sessionID,
+	})
+}
+
+// SendAsyncWithContext sends a webhook asynchronously with optional runtime context.
+func (s *Sender) SendAsyncWithContext(sendCtx SendContext) {
 	s.wg.Add(1)
 	// Use SafeGo to protect against panics in async webhook sending
 	errorhandler.SafeGo(func() {
 		defer s.wg.Done()
 
-		if err := s.Send(status, message, sessionID); err != nil {
+		if err := s.SendWithContext(sendCtx); err != nil {
 			errorhandler.HandleError(err, "Async webhook send failed")
 		}
 	})

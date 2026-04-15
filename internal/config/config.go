@@ -50,15 +50,16 @@ type DesktopConfig struct {
 
 // WebhookConfig represents webhook settings
 type WebhookConfig struct {
-	Enabled        bool                 `json:"enabled"`
-	Preset         string               `json:"preset"`
-	URL            string               `json:"url"`
-	ChatID         string               `json:"chat_id"`
-	Format         string               `json:"format"`
-	Headers        map[string]string    `json:"headers"`
-	Retry          RetryConfig          `json:"retry"`
-	CircuitBreaker CircuitBreakerConfig `json:"circuitBreaker"`
-	RateLimit      RateLimitConfig      `json:"rateLimit"`
+	Enabled        bool                   `json:"enabled"`
+	Preset         string                 `json:"preset"`
+	URL            string                 `json:"url"`
+	ChatID         string                 `json:"chat_id"`
+	Format         string                 `json:"format"`
+	Headers        map[string]string      `json:"headers"`
+	PayloadFields  map[string]interface{} `json:"payloadFields,omitempty"`
+	Retry          RetryConfig            `json:"retry"`
+	CircuitBreaker CircuitBreakerConfig   `json:"circuitBreaker"`
+	RateLimit      RateLimitConfig        `json:"rateLimit"`
 }
 
 // RetryConfig represents retry settings
@@ -150,12 +151,13 @@ func DefaultConfig() *Config {
 				// TerminalBundleID: "" - empty means auto-detect
 			},
 			Webhook: WebhookConfig{
-				Enabled: false,
-				Preset:  "custom",
-				URL:     "",
-				ChatID:  "",
-				Format:  "json",
-				Headers: make(map[string]string),
+				Enabled:       false,
+				Preset:        "custom",
+				URL:           "",
+				ChatID:        "",
+				Format:        "json",
+				Headers:       make(map[string]string),
+				PayloadFields: make(map[string]interface{}),
 				Retry: RetryConfig{
 					Enabled:        true,
 					MaxAttempts:    3,
@@ -375,6 +377,9 @@ func (c *Config) ApplyDefaults() {
 	if c.Notifications.Webhook.Headers == nil {
 		c.Notifications.Webhook.Headers = make(map[string]string)
 	}
+	if c.Notifications.Webhook.PayloadFields == nil {
+		c.Notifications.Webhook.PayloadFields = make(map[string]interface{})
+	}
 
 	// Cooldown defaults (nil = not set in config, apply defaults)
 	if c.Notifications.SuppressQuestionAfterTaskCompleteSeconds == nil {
@@ -424,6 +429,13 @@ func (c *Config) Validate() error {
 	}
 	if c.Notifications.Webhook.Enabled && !validFormats[c.Notifications.Webhook.Format] {
 		return fmt.Errorf("invalid webhook format: %s (must be one of: json, text)", c.Notifications.Webhook.Format)
+	}
+
+	if c.Notifications.Webhook.Enabled &&
+		c.Notifications.Webhook.Preset == "custom" &&
+		c.Notifications.Webhook.Format == "text" &&
+		len(c.Notifications.Webhook.PayloadFields) > 0 {
+		return fmt.Errorf("webhook payloadFields require json format when using custom preset")
 	}
 
 	// Validate webhook URL if enabled

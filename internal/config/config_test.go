@@ -50,7 +50,12 @@ func TestLoadConfig(t *testing.T) {
 				"enabled": true,
 				"preset": "slack",
 				"url": "https://hooks.slack.com/test",
-				"format": "json"
+				"format": "json",
+				"payloadFields": {
+					"context": {
+						"gitEmail": "${{git.user.email}}"
+					}
+				}
 			},
 			"suppressQuestionAfterTaskCompleteSeconds": 10
 		},
@@ -73,6 +78,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.False(t, cfg.Notifications.Desktop.Enabled)
 	assert.True(t, cfg.Notifications.Webhook.Enabled)
 	assert.Equal(t, "slack", cfg.Notifications.Webhook.Preset)
+	assert.Equal(t, "${{git.user.email}}", cfg.Notifications.Webhook.PayloadFields["context"].(map[string]interface{})["gitEmail"])
 	assert.Equal(t, intPtr(10), cfg.Notifications.SuppressQuestionAfterTaskCompleteSeconds)
 }
 
@@ -397,6 +403,9 @@ func TestApplyDefaults(t *testing.T) {
 			if tt.cfg.Notifications.SuppressQuestionAfterTaskCompleteSeconds == nil {
 				t.Errorf("SuppressQuestionAfterTaskCompleteSeconds should be set to default")
 			}
+			if tt.cfg.Notifications.Webhook.PayloadFields == nil {
+				t.Errorf("Webhook.PayloadFields should be initialized")
+			}
 			if len(tt.cfg.Statuses) == 0 {
 				t.Errorf("Statuses should be populated from defaults")
 			}
@@ -477,6 +486,24 @@ func TestValidateConfig_MoreCases(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "custom text webhook cannot use payload fields",
+			cfg: &Config{
+				Notifications: NotificationsConfig{
+					Webhook: WebhookConfig{
+						Enabled: true,
+						Preset:  "custom",
+						URL:     "https://example.com",
+						Format:  "text",
+						PayloadFields: map[string]interface{}{
+							"git_email": "${{git.user.email}}",
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "payloadFields",
 		},
 	}
 

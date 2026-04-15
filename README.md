@@ -213,7 +213,8 @@ Edit the config file directly:
       "url": "",
       "chat_id": "",
       "format": "json",
-      "headers": {}
+      "headers": {},
+      "payloadFields": {}
     },
     "suppressQuestionAfterTaskCompleteSeconds": 12,
     "suppressQuestionAfterAnyNotificationSeconds": 7,

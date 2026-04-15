@@ -24,7 +24,8 @@ Edit `~/.claude/claude-notifications-go/config.json`:
       "enabled": true,
       "preset": "",
       "url": "https://your-webhook-endpoint.com/notifications",
-      "format": "json"
+      "format": "json",
+      "payloadFields": {}
     }
   }
 }
@@ -44,7 +45,9 @@ Custom webhooks receive a JSON payload:
   "status": "task_complete",
   "message": "[bold-cat] Created new authentication system with JWT tokens",
   "session_id": "abc-123",
-  "timestamp": 1729353045
+  "timestamp": "2026-04-13T12:34:56Z",
+  "source": "claude-notifications",
+  "title": "✅ Completed"
 }
 ```
 
@@ -52,7 +55,60 @@ Custom webhooks receive a JSON payload:
 - `status` (string) - One of: `task_complete`, `review_complete`, `question`, `plan_ready`, `session_limit_reached`
 - `message` (string) - Notification message with session name
 - `session_id` (string) - Unique session identifier
-- `timestamp` (integer) - Unix timestamp (seconds since epoch)
+- `timestamp` (string) - RFC3339 timestamp
+- `source` (string) - Always `claude-notifications`
+- `title` (string) - Status title from config
+
+## Dynamic Fields
+
+You can inject runtime values into header values and extra JSON payload fields.
+
+### Example
+
+```json
+{
+  "notifications": {
+    "webhook": {
+      "enabled": true,
+      "preset": "",
+      "url": "https://your-webhook-endpoint.com/notifications",
+      "format": "json",
+      "headers": {
+        "Authorization": "Bearer ${{env.WEBHOOK_TOKEN}}",
+        "X-Git-Branch": "${{git.branch}}"
+      },
+      "payloadFields": {
+        "context": {
+          "git": {
+            "userEmail": "${{git.user.email}}",
+            "commit": "${{git.commit.short_hash}}"
+          },
+          "environment": "${{env.DEPLOY_ENV}}"
+        },
+        "session_name": "${{session_name}}",
+        "sent_at_unix": "${{time.unix}}"
+      }
+    }
+  }
+}
+```
+
+### Supported Templates
+
+- `${{status}}`, `${{title}}`, `${{message}}`
+- `${{session_id}}`, `${{session_name}}`
+- `${{cwd}}`, `${{folder}}`
+- `${{time.rfc3339}}`, `${{time.unix}}`, `${{time.unix_ms}}`
+- `${{env.MY_VAR}}`
+- `${{git.branch}}`
+- `${{git.user.name}}`, `${{git.user.email}}`
+- `${{git.commit.hash}}`, `${{git.commit.short_hash}}`
+- `${{git.commit.author.name}}`, `${{git.commit.author.email}}`
+
+Notes:
+- `payloadFields` is merged into the generated JSON payload
+- Missing template values are skipped instead of failing the webhook
+- `payloadFields` is not supported with `format: "text"`
 
 ## Authentication
 

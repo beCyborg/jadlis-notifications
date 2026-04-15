@@ -46,7 +46,7 @@ type notifierInterface interface {
 
 // webhookInterface defines the interface for sending webhook notifications
 type webhookInterface interface {
-	SendAsync(status analyzer.Status, message, sessionID string)
+	SendAsyncWithContext(sendCtx webhook.SendContext)
 	Shutdown(timeout time.Duration) error
 }
 
@@ -555,7 +555,12 @@ func (h *Handler) sendNotifications(status analyzer.Status, message, sessionID, 
 
 	// Send webhook notification (async, check per-status enabled)
 	if h.cfg.IsStatusWebhookEnabled(statusStr) {
-		h.webhookSvc.SendAsync(status, enhancedMessage, sessionID)
+		h.webhookSvc.SendAsyncWithContext(webhook.SendContext{
+			Status:    status,
+			Message:   enhancedMessage,
+			SessionID: sessionID,
+			CWD:       cwd,
+		})
 	} else {
 		logging.Debug("Webhook notification disabled for status: %s", statusStr)
 	}

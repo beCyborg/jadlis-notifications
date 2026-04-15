@@ -119,6 +119,56 @@ func TestGetGitBranch_DetachedHead(t *testing.T) {
 	}
 }
 
+func TestGetGitMetadata_RealRepo(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "git-test-metadata-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := runGitCommand(tmpDir, "init"); err != nil {
+		t.Skipf("git not available: %v", err)
+	}
+
+	_ = runGitCommand(tmpDir, "config", "user.email", "test@test.com")
+	_ = runGitCommand(tmpDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "add", "."); err != nil {
+		t.Fatalf("git add failed: %v", err)
+	}
+	if err := runGitCommand(tmpDir, "commit", "-m", "initial"); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+	_ = runGitCommand(tmpDir, "branch", "-M", "metadata-branch")
+
+	metadata := GetGitMetadata(tmpDir)
+	if metadata.Branch != "metadata-branch" {
+		t.Errorf("Branch = %q, want %q", metadata.Branch, "metadata-branch")
+	}
+	if metadata.UserEmail != "test@test.com" {
+		t.Errorf("UserEmail = %q, want %q", metadata.UserEmail, "test@test.com")
+	}
+	if metadata.UserName != "Test User" {
+		t.Errorf("UserName = %q, want %q", metadata.UserName, "Test User")
+	}
+	if metadata.CommitHash == "" {
+		t.Error("CommitHash should not be empty")
+	}
+	if metadata.CommitShortHash == "" {
+		t.Error("CommitShortHash should not be empty")
+	}
+	if metadata.CommitAuthorName != "Test User" {
+		t.Errorf("CommitAuthorName = %q, want %q", metadata.CommitAuthorName, "Test User")
+	}
+	if metadata.CommitAuthorEmail != "test@test.com" {
+		t.Errorf("CommitAuthorEmail = %q, want %q", metadata.CommitAuthorEmail, "test@test.com")
+	}
+}
+
 // runGitCommand executes a git command in the specified directory
 func runGitCommand(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)

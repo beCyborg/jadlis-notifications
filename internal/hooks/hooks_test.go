@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/claude-notifications/internal/dedup"
 	"github.com/777genius/claude-notifications/internal/state"
 	"github.com/777genius/claude-notifications/internal/teamstate"
+	"github.com/777genius/claude-notifications/internal/webhook"
 	"github.com/777genius/claude-notifications/pkg/jsonl"
 )
 
@@ -98,16 +99,18 @@ type webhookCall struct {
 	status    analyzer.Status
 	message   string
 	sessionID string
+	cwd       string
 }
 
-func (m *mockWebhook) SendAsync(status analyzer.Status, message, sessionID string) {
+func (m *mockWebhook) SendAsyncWithContext(sendCtx webhook.SendContext) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.calls = append(m.calls, webhookCall{
-		status:    status,
-		message:   message,
-		sessionID: sessionID,
+		status:    sendCtx.Status,
+		message:   sendCtx.Message,
+		sessionID: sendCtx.SessionID,
+		cwd:       sendCtx.CWD,
 	})
 }
 
@@ -120,7 +123,11 @@ func (m *mockWebhook) Shutdown(timeout time.Duration) error {
 }
 
 func (m *mockWebhook) Send(status analyzer.Status, message, sessionID string) error {
-	m.SendAsync(status, message, sessionID)
+	m.SendAsyncWithContext(webhook.SendContext{
+		Status:    status,
+		Message:   message,
+		SessionID: sessionID,
+	})
 	return nil
 }
 

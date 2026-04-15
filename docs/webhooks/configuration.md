@@ -45,7 +45,8 @@ Complete configuration options for webhook reliability features.
       "url": "https://...",
       "chat_id": "",
       "format": "json",
-      "headers": {}
+      "headers": {},
+      "payloadFields": {}
     }
   }
 }
@@ -55,7 +56,26 @@ Complete configuration options for webhook reliability features.
 |-------|------|----------|-------------|
 | `chat_id` | string | For Telegram | Telegram chat/group ID |
 | `format` | string | No | Payload format (default: `"json"`) |
-| `headers` | object | No | Custom HTTP headers for authentication |
+| `headers` | object | No | Custom HTTP headers. Values can include templates like `${{env.API_TOKEN}}` |
+| `payloadFields` | object | No | Extra JSON fields merged into the generated payload after template resolution |
+
+### Template Variables
+
+Header values and `payloadFields` string values can use templates:
+
+- `${{status}}`, `${{title}}`, `${{message}}`
+- `${{session_id}}`, `${{session_name}}`
+- `${{cwd}}`, `${{folder}}`
+- `${{time.rfc3339}}`, `${{time.unix}}`, `${{time.unix_ms}}`
+- `${{env.MY_VAR}}`
+- `${{git.branch}}`
+- `${{git.user.name}}`, `${{git.user.email}}`
+- `${{git.commit.hash}}`, `${{git.commit.short_hash}}`
+- `${{git.commit.author.name}}`, `${{git.commit.author.email}}`
+
+Notes:
+- `payloadFields` works with JSON payloads only
+- Missing template values are skipped instead of failing the webhook request
 
 ## Retry Configuration
 
