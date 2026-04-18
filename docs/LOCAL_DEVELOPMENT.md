@@ -53,6 +53,69 @@ Use this when the change must be exercised by a real `claude` process with hooks
 - Windows is currently not a supported target for this harness.
 - Run `scripts/e2e-real-claude.sh status` to see what the current machine supports before running a mode.
 
+### Manual desktop notification debugging
+
+Use this when you need to debug desktop notification delivery itself on any supported OS. This bypasses the real-`claude` harness and sends a hook event directly to the built binary, which is enough to answer:
+
+- did our hook handler run
+- did the notifier return success or error
+- did the OS show the banner immediately, only in notification history/center, or not at all
+
+Build the binary from the repo root:
+
+macOS / Linux:
+
+```bash
+go build -o bin/claude-notifications ./cmd/claude-notifications
+./bin/claude-notifications version
+```
+
+Windows PowerShell:
+
+```powershell
+go build -o bin/claude-notifications.exe ./cmd/claude-notifications
+.\bin\claude-notifications.exe version
+```
+
+Trigger a direct desktop notification with a minimal `PreToolUse` payload:
+
+macOS / Linux:
+
+```bash
+echo '{"session_id":"local-debug","tool_name":"ExitPlanMode"}' | ./bin/claude-notifications handle-hook PreToolUse
+```
+
+Windows PowerShell:
+
+```powershell
+'{"session_id":"win-debug","tool_name":"ExitPlanMode"}' | .\bin\claude-notifications.exe handle-hook PreToolUse
+```
+
+Windows Git Bash:
+
+```bash
+go build -o bin/claude-notifications.exe ./cmd/claude-notifications
+echo '{"session_id":"win-debug","tool_name":"ExitPlanMode"}' | ./bin/claude-notifications.exe handle-hook PreToolUse
+```
+
+What to collect:
+
+1. Whether the notification banner appears immediately.
+2. Whether it appears only in the OS notification history / center.
+3. The last lines from `notification-debug.log` in the repo root.
+4. The output of the built binary's `version` command.
+5. Relevant OS notification settings:
+   - macOS: `System Settings > Notifications > Claude Notifier`
+   - Linux: desktop-environment notification settings and whether the session is local desktop vs headless/remote
+   - Windows: `Settings > System > Notifications > Claude Code Notifications`
+6. On macOS / Linux, if click-to-focus is part of the report, whether clicking the notification activates the expected window.
+
+Interpretation:
+
+- If the log says the desktop notification was sent successfully but no banner appears, the problem is likely in the OS notification layer or app notification settings rather than in Claude hook parsing.
+- If the log shows a notifier-specific error such as `beeep.Notify failed`, we likely have a platform integration bug.
+- If the direct command works but notifications from Claude Code are still delayed or missing, the next place to inspect is the hook invocation path rather than notification delivery.
+
 ### Smoke test against the currently installed plugin
 
 ```bash
