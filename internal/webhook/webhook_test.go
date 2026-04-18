@@ -551,7 +551,7 @@ func TestSenderSendAsync(t *testing.T) {
 	completed := make(chan bool)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(50 * time.Millisecond) // Simulate slow response
+		time.Sleep(200 * time.Millisecond) // Simulate slow response
 		w.WriteHeader(http.StatusOK)
 		completed <- true
 	}))
@@ -565,8 +565,8 @@ func TestSenderSendAsync(t *testing.T) {
 	sender.SendAsync(analyzer.StatusTaskComplete, "Test", "session-123")
 	elapsed := time.Since(start)
 
-	// Should return immediately
-	if elapsed > 10*time.Millisecond {
+	// Should return well before the slow request completes, even under race-enabled CI.
+	if elapsed > 50*time.Millisecond {
 		t.Errorf("SendAsync blocked for %v", elapsed)
 	}
 
