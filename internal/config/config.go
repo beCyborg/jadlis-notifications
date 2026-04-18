@@ -84,11 +84,18 @@ type RateLimitConfig struct {
 	RequestsPerMinute int  `json:"requestsPerMinute"`
 }
 
+// StatusChannelConfig represents per-channel status overrides.
+type StatusChannelConfig struct {
+	Enabled *bool `json:"enabled,omitempty"` // nil = inherit default enabled behavior
+}
+
 // StatusInfo represents configuration for a specific status
 type StatusInfo struct {
-	Enabled *bool  `json:"enabled,omitempty"` // nil = true (default for backward compatibility)
-	Title   string `json:"title"`
-	Sound   string `json:"sound"`
+	Enabled *bool                `json:"enabled,omitempty"` // nil = true (default for backward compatibility)
+	Desktop *StatusChannelConfig `json:"desktop,omitempty"`
+	Webhook *StatusChannelConfig `json:"webhook,omitempty"`
+	Title   string               `json:"title"`
+	Sound   string               `json:"sound"`
 }
 
 // SuppressFilter defines conditions for suppressing notifications.
@@ -576,6 +583,13 @@ func (c *Config) IsStatusEnabled(status string) bool {
 	return *info.Enabled
 }
 
+func isStatusChannelEnabled(channel *StatusChannelConfig) bool {
+	if channel == nil || channel.Enabled == nil {
+		return true
+	}
+	return *channel.Enabled
+}
+
 // IsTerminalBellEnabled returns true if terminal bell (BEL) should be sent (default: true)
 func (c *Config) IsTerminalBellEnabled() bool {
 	if c.Notifications.Desktop.TerminalBell == nil {
@@ -585,15 +599,33 @@ func (c *Config) IsTerminalBellEnabled() bool {
 }
 
 // IsStatusDesktopEnabled returns true if desktop notifications for this status are enabled
-// Considers both global desktop.enabled and per-status enabled
+// Considers global desktop.enabled, per-status enabled, and per-channel desktop override.
 func (c *Config) IsStatusDesktopEnabled(status string) bool {
-	return c.IsDesktopEnabled() && c.IsStatusEnabled(status)
+	if !c.IsDesktopEnabled() || !c.IsStatusEnabled(status) {
+		return false
+	}
+
+	info, exists := c.Statuses[status]
+	if !exists {
+		return true
+	}
+
+	return isStatusChannelEnabled(info.Desktop)
 }
 
 // IsStatusWebhookEnabled returns true if webhook notifications for this status are enabled
-// Considers both global webhook.enabled and per-status enabled
+// Considers global webhook.enabled, per-status enabled, and per-channel webhook override.
 func (c *Config) IsStatusWebhookEnabled(status string) bool {
-	return c.IsWebhookEnabled() && c.IsStatusEnabled(status)
+	if !c.IsWebhookEnabled() || !c.IsStatusEnabled(status) {
+		return false
+	}
+
+	info, exists := c.Statuses[status]
+	if !exists {
+		return true
+	}
+
+	return isStatusChannelEnabled(info.Webhook)
 }
 
 // ShouldFilter returns true if any suppress-filter rule matches the given context.

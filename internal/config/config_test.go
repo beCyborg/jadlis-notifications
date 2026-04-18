@@ -851,40 +851,56 @@ func TestIsStatusEnabled(t *testing.T) {
 
 func TestIsStatusDesktopEnabled(t *testing.T) {
 	tests := []struct {
-		name          string
-		globalEnabled bool
-		statusEnabled *bool
-		expected      bool
+		name           string
+		status         string
+		globalEnabled  bool
+		statusEnabled  *bool
+		channelEnabled *bool
+		expected       bool
 	}{
 		{
-			name:          "global enabled + status enabled (nil)",
+			name:          "global enabled + status enabled by default",
+			status:        "task_complete",
 			globalEnabled: true,
-			statusEnabled: nil,
 			expected:      true,
 		},
 		{
-			name:          "global enabled + status explicit true",
+			name:           "desktop override disables desktop only",
+			status:         "task_complete",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(true),
+			channelEnabled: boolPtr(false),
+			expected:       false,
+		},
+		{
+			name:           "desktop override enables desktop when status is enabled",
+			status:         "task_complete",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(true),
+			channelEnabled: boolPtr(true),
+			expected:       true,
+		},
+		{
+			name:           "status disabled overrides desktop channel allow",
+			status:         "task_complete",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(false),
+			channelEnabled: boolPtr(true),
+			expected:       false,
+		},
+		{
+			name:           "global desktop disabled",
+			status:         "task_complete",
+			globalEnabled:  false,
+			statusEnabled:  boolPtr(true),
+			channelEnabled: boolPtr(true),
+			expected:       false,
+		},
+		{
+			name:          "unknown status defaults to enabled",
+			status:        "unknown_status",
 			globalEnabled: true,
-			statusEnabled: boolPtr(true),
 			expected:      true,
-		},
-		{
-			name:          "global enabled + status disabled",
-			globalEnabled: true,
-			statusEnabled: boolPtr(false),
-			expected:      false,
-		},
-		{
-			name:          "global disabled + status enabled",
-			globalEnabled: false,
-			statusEnabled: boolPtr(true),
-			expected:      false,
-		},
-		{
-			name:          "global disabled + status disabled",
-			globalEnabled: false,
-			statusEnabled: boolPtr(false),
-			expected:      false,
 		},
 	}
 
@@ -893,11 +909,16 @@ func TestIsStatusDesktopEnabled(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Notifications.Desktop.Enabled = tt.globalEnabled
 
-			info := cfg.Statuses["task_complete"]
-			info.Enabled = tt.statusEnabled
-			cfg.Statuses["task_complete"] = info
+			if tt.status != "unknown_status" {
+				info := cfg.Statuses[tt.status]
+				info.Enabled = tt.statusEnabled
+				if tt.channelEnabled != nil {
+					info.Desktop = &StatusChannelConfig{Enabled: tt.channelEnabled}
+				}
+				cfg.Statuses[tt.status] = info
+			}
 
-			result := cfg.IsStatusDesktopEnabled("task_complete")
+			result := cfg.IsStatusDesktopEnabled(tt.status)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -905,28 +926,56 @@ func TestIsStatusDesktopEnabled(t *testing.T) {
 
 func TestIsStatusWebhookEnabled(t *testing.T) {
 	tests := []struct {
-		name          string
-		globalEnabled bool
-		statusEnabled *bool
-		expected      bool
+		name           string
+		status         string
+		globalEnabled  bool
+		statusEnabled  *bool
+		channelEnabled *bool
+		expected       bool
 	}{
 		{
-			name:          "global enabled + status enabled (nil)",
+			name:          "global enabled + status enabled by default",
+			status:        "task_complete",
 			globalEnabled: true,
-			statusEnabled: nil,
 			expected:      true,
 		},
 		{
-			name:          "global enabled + status disabled",
-			globalEnabled: true,
-			statusEnabled: boolPtr(false),
-			expected:      false,
+			name:           "webhook override disables webhook only",
+			status:         "task_complete",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(true),
+			channelEnabled: boolPtr(false),
+			expected:       false,
 		},
 		{
-			name:          "global disabled + status enabled",
-			globalEnabled: false,
-			statusEnabled: boolPtr(true),
-			expected:      false,
+			name:           "webhook override enables webhook when status is enabled",
+			status:         "task_complete",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(true),
+			channelEnabled: boolPtr(true),
+			expected:       true,
+		},
+		{
+			name:           "status disabled overrides webhook channel allow",
+			status:         "task_complete",
+			globalEnabled:  true,
+			statusEnabled:  boolPtr(false),
+			channelEnabled: boolPtr(true),
+			expected:       false,
+		},
+		{
+			name:           "global webhook disabled",
+			status:         "task_complete",
+			globalEnabled:  false,
+			statusEnabled:  boolPtr(true),
+			channelEnabled: boolPtr(true),
+			expected:       false,
+		},
+		{
+			name:          "unknown status defaults to enabled",
+			status:        "unknown_status",
+			globalEnabled: true,
+			expected:      true,
 		},
 	}
 
@@ -935,11 +984,16 @@ func TestIsStatusWebhookEnabled(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Notifications.Webhook.Enabled = tt.globalEnabled
 
-			info := cfg.Statuses["task_complete"]
-			info.Enabled = tt.statusEnabled
-			cfg.Statuses["task_complete"] = info
+			if tt.status != "unknown_status" {
+				info := cfg.Statuses[tt.status]
+				info.Enabled = tt.statusEnabled
+				if tt.channelEnabled != nil {
+					info.Webhook = &StatusChannelConfig{Enabled: tt.channelEnabled}
+				}
+				cfg.Statuses[tt.status] = info
+			}
 
-			result := cfg.IsStatusWebhookEnabled("task_complete")
+			result := cfg.IsStatusWebhookEnabled(tt.status)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -974,6 +1028,9 @@ func TestBackwardCompatibility_NoEnabledField(t *testing.T) {
 	assert.True(t, cfg.IsStatusEnabled("question"))
 	assert.True(t, cfg.IsStatusEnabled("plan_ready"))
 	assert.True(t, cfg.IsStatusEnabled("review_complete"))
+	assert.True(t, cfg.IsStatusDesktopEnabled("task_complete"))
+	cfg.Notifications.Webhook.Enabled = true
+	assert.True(t, cfg.IsStatusWebhookEnabled("task_complete"))
 }
 
 func TestLoadConfig_WithStatusEnabled(t *testing.T) {
@@ -1012,6 +1069,45 @@ func TestLoadConfig_WithStatusEnabled(t *testing.T) {
 	// question should be enabled
 	assert.True(t, cfg.IsStatusEnabled("question"))
 	assert.True(t, cfg.IsStatusDesktopEnabled("question"))
+	assert.False(t, cfg.IsStatusWebhookEnabled("question"))
+}
+
+func TestLoadConfig_WithStatusChannelOverrides(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	configJSON := `{
+		"notifications": {
+			"desktop": {"enabled": true},
+			"webhook": {"enabled": true, "url": "https://example.com/webhook"}
+		},
+		"statuses": {
+			"task_complete": {
+				"title": "Task Done",
+				"sound": "/path/to/sound.mp3",
+				"desktop": {"enabled": false},
+				"webhook": {"enabled": true}
+			},
+			"question": {
+				"title": "Question",
+				"sound": "/path/to/question.mp3",
+				"webhook": {"enabled": false}
+			}
+		}
+	}`
+
+	err := os.WriteFile(configPath, []byte(configJSON), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	require.NotNil(t, cfg.Statuses["task_complete"].Desktop)
+	require.NotNil(t, cfg.Statuses["task_complete"].Webhook)
+	assert.False(t, cfg.IsStatusDesktopEnabled("task_complete"))
+	assert.True(t, cfg.IsStatusWebhookEnabled("task_complete"))
+	assert.True(t, cfg.IsStatusDesktopEnabled("question"))
+	assert.False(t, cfg.IsStatusWebhookEnabled("question"))
 }
 
 // === Tests for stable config path ===

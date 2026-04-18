@@ -274,6 +274,25 @@ Edit the config file directly:
 
 Each status can be individually disabled by adding `"enabled": false`.
 
+You can also override individual channels per status:
+
+```json
+{
+  "statuses": {
+    "question": {
+      "title": "❓ Question",
+      "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/question.mp3",
+      "desktop": { "enabled": true },
+      "webhook": { "enabled": false }
+    }
+  }
+}
+```
+
+`statuses.<name>.enabled` is still the master switch for both channels. Use
+`desktop.enabled` and `webhook.enabled` when you want one channel on and the
+other off for the same status.
+
 ### Sound Options
 
 **Built-in sounds** (included):

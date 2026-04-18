@@ -1679,6 +1679,8 @@ func TestHandler_StatusDisabled_SkipsWebhookNotification(t *testing.T) {
 		Statuses: map[string]config.StatusInfo{
 			"task_complete": {
 				Enabled: boolPtr(false), // Disabled!
+				Desktop: &config.StatusChannelConfig{Enabled: boolPtr(true)},
+				Webhook: &config.StatusChannelConfig{Enabled: boolPtr(true)},
 				Title:   "Task Complete",
 			},
 		},
@@ -1708,6 +1710,84 @@ func TestHandler_StatusDisabled_SkipsWebhookNotification(t *testing.T) {
 	// Should NOT send webhook notification
 	if mockWH.wasCalled() {
 		t.Error("expected NO webhook notification for disabled status")
+	}
+}
+
+func TestHandler_StatusDesktopOverride_SkipsDesktopButSendsWebhook(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+			Webhook: config.WebhookConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				Desktop: &config.StatusChannelConfig{Enabled: boolPtr(false)},
+				Webhook: &config.StatusChannelConfig{Enabled: boolPtr(true)},
+				Title:   "Task Complete",
+			},
+		},
+	}
+
+	handler, mockNotif, mockWH := newTestHandler(t, cfg)
+
+	transcriptPath := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID:      "test-desktop-override-1",
+		TranscriptPath: transcriptPath,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if mockNotif.wasCalled() {
+		t.Error("expected NO desktop notification when desktop override is disabled")
+	}
+	if !mockWH.wasCalled() {
+		t.Error("expected webhook notification when webhook override is enabled")
+	}
+}
+
+func TestHandler_StatusWebhookOverride_SkipsWebhookButSendsDesktop(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop: config.DesktopConfig{Enabled: true},
+			Webhook: config.WebhookConfig{Enabled: true},
+		},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete": {
+				Desktop: &config.StatusChannelConfig{Enabled: boolPtr(true)},
+				Webhook: &config.StatusChannelConfig{Enabled: boolPtr(false)},
+				Title:   "Task Complete",
+			},
+		},
+	}
+
+	handler, mockNotif, mockWH := newTestHandler(t, cfg)
+
+	transcriptPath := createTempTranscript(t,
+		buildTranscriptWithTools([]string{"Write"}, 300))
+
+	hookData := buildHookDataJSON(HookData{
+		SessionID:      "test-webhook-override-1",
+		TranscriptPath: transcriptPath,
+		CWD:            "/test",
+	})
+
+	err := handler.HandleHook("Stop", hookData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !mockNotif.wasCalled() {
+		t.Error("expected desktop notification when desktop override is enabled")
+	}
+	if mockWH.wasCalled() {
+		t.Error("expected NO webhook notification when webhook override is disabled")
 	}
 }
 

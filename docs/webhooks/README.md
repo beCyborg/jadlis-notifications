@@ -29,6 +29,26 @@ echo '{"session_id":"test","tool_name":"ExitPlanMode"}' | \
   bin/claude-notifications handle-hook PreToolUse
 ```
 
+### Per-Status Webhook Control
+
+If you want desktop notifications for a status but do not want webhook noise,
+use a per-status webhook override in `~/.claude/claude-notifications-go/config.json`:
+
+```json
+{
+  "statuses": {
+    "question": {
+      "webhook": {
+        "enabled": false
+      }
+    }
+  }
+}
+```
+
+This only affects the webhook channel. If you set `statuses.<name>.enabled` to
+`false`, both desktop and webhook notifications are disabled for that status.
+
 ## Platform Guides
 
 Choose your platform for detailed setup instructions:
