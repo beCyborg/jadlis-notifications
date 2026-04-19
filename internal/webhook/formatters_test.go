@@ -737,6 +737,16 @@ func TestParseActionSummary(t *testing.T) {
 				{"name": "Details", "value": "🐛 1 bug", "inline": true},
 			},
 		},
+		{
+			// Discord rejects fields with empty value (HTTP 400). Bare emoji
+			// segments (no trailing data) must be skipped, not emitted with
+			// an empty value.
+			name: "bare emoji skipped",
+			in:   "📝  ▶ 3 cmds",
+			want: []map[string]interface{}{
+				{"name": "Commands", "value": "3 cmds", "inline": true},
+			},
+		},
 	}
 
 	for _, tt := range tests {

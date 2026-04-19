@@ -152,6 +152,12 @@ func parseActionSummary(s string) []map[string]interface{} {
 		for _, m := range actionEmojiField {
 			if strings.HasPrefix(seg, m.prefix) {
 				value := strings.TrimSpace(strings.TrimPrefix(seg, m.prefix))
+				if value == "" {
+					// Discord rejects fields with empty value (HTTP 400). Skip
+					// segments that have no payload after their emoji prefix.
+					matched = true
+					break
+				}
 				fields = append(fields, map[string]interface{}{
 					"name":   m.name,
 					"value":  value,
