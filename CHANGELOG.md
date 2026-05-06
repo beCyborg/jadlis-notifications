@@ -5,13 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.0] - 2026-05-06
+
+### Added
+- **Discord webhooks now render native embeds** - Discord notifications use structured embed author, field, and footer data instead of relying only on plain-text webhook content
+- **Windows PowerShell hook generation** - `claude-notifications windows-hooks` can generate PowerShell-native Claude hook configuration for Windows installs
+
+### Changed
+- **Status config cleanup** - removed the legacy Ghostty `keywords` field from generated status configuration and aligned architecture documentation
+
+### Fixed
+- **Windows: native hooks no longer depend on Git Bash script execution** - installer now rewrites PreToolUse, Notification, Stop, SubagentStop, and TeammateIdle hooks to call the native Windows `.exe` through PowerShell with an absolute path, avoiding silent `hook-wrapper.sh` launch failures on Windows 10/11 ([#79](https://github.com/777genius/claude-notifications-go/issues/79), [#80](https://github.com/777genius/claude-notifications-go/pull/80))
+- **Discord embed robustness** - webhook rendering now skips empty Discord embed fields and clamps overlong author names before sending payloads
+
 ## [1.38.0] - 2026-04-18
 
 ### Added
 - **Per-channel status overrides for desktop and webhook notifications** - each `statuses.<name>` entry can now define `desktop.enabled` and `webhook.enabled` independently, so you can disable webhook delivery for specific statuses while keeping desktop notifications on, or do the reverse ([#74](https://github.com/777genius/claude-notifications-go/issues/74))
 
 ### Fixed
-- **Windows: native hooks no longer depend on Git Bash script execution** - installer now rewrites PreToolUse, Notification, Stop, SubagentStop, and TeammateIdle hooks to call the native Windows `.exe` through PowerShell with an absolute path, avoiding silent `hook-wrapper.sh` launch failures on Windows 10/11 ([#79](https://github.com/777genius/claude-notifications-go/issues/79))
 - **CI stability for async webhook tests** - relaxed an overly strict `SendAsync` timing assertion under race-enabled CI, removing a macOS false negative without weakening the async behavior guarantee
 
 ## [1.37.0] - 2026-04-15
