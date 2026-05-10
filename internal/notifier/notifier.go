@@ -237,6 +237,7 @@ func runClaudeNotifierApp(appPath string, args []string) error {
 	openArgs := []string{
 		"-W",
 		"-n",
+		"-g",
 		"-i", "/dev/null",
 		"-o", stdoutPath,
 		"--stderr", stderrPath,
@@ -274,7 +275,7 @@ func runClaudeNotifierApp(appPath string, args []string) error {
 // UNUserNotificationCenter gets valid bundle metadata under hardened runtime.
 func buildNotifierCommand(notifierPath string, args []string) *exec.Cmd {
 	if appPath, ok := claudeNotifierAppPath(notifierPath); ok {
-		openArgs := []string{"-W", "-n", appPath, "--args", "-launchedViaLaunchServices"}
+		openArgs := []string{"-W", "-n", "-g", appPath, "--args", "-launchedViaLaunchServices"}
 		openArgs = append(openArgs, args...)
 		return exec.Command("open", openArgs...)
 	}

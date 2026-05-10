@@ -720,16 +720,16 @@ func TestBuildNotifierCommand_UsesOpenForClaudeNotifier(t *testing.T) {
 		t.Fatalf("Expected open command for ClaudeNotifier.app, got %s", cmd.Path)
 	}
 
-	if len(cmd.Args) < 8 {
+	if len(cmd.Args) < 9 {
 		t.Fatalf("Expected open command args with --args payload, got: %v", cmd.Args)
 	}
-	if cmd.Args[1] != "-W" || cmd.Args[2] != "-n" {
-		t.Fatalf("Expected open -W -n flags, got: %v", cmd.Args)
+	if cmd.Args[1] != "-W" || cmd.Args[2] != "-n" || cmd.Args[3] != "-g" {
+		t.Fatalf("Expected open -W -n -g flags, got: %v", cmd.Args)
 	}
-	if cmd.Args[4] != "--args" {
+	if cmd.Args[5] != "--args" {
 		t.Fatalf("Expected --args marker, got: %v", cmd.Args)
 	}
-	if cmd.Args[5] != "-launchedViaLaunchServices" {
+	if cmd.Args[6] != "-launchedViaLaunchServices" {
 		t.Fatalf("Expected LaunchServices marker arg, got: %v", cmd.Args)
 	}
 }
