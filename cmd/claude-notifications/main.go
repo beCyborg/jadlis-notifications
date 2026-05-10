@@ -18,7 +18,7 @@ import (
 	"github.com/777genius/claude-notifications/internal/notifier"
 )
 
-const version = "1.39.0"
+const version = "1.39.1"
 const windowsLazyUpdateRetryAfter = time.Hour
 
 var (
