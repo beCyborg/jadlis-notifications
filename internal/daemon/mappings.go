@@ -104,9 +104,43 @@ func getClaudeNotificationsDesktopEntryPath() string {
 	return dataHome + "/applications/" + claudeNotificationsDesktopEntryID + ".desktop"
 }
 
+// GetGnomeWmClass returns the WM_CLASS used by the activate-window-by-title
+// GNOME Shell extension for activateByWmClass calls.
+// For Wayland-native apps this is the app_id in reverse-domain format.
+func GetGnomeWmClass(terminalName string) string {
+	switch strings.ToLower(terminalName) {
+	case "ghostty":
+		return "com.mitchellh.ghostty"
+	case "wezterm":
+		return "org.wezfurlong.wezterm"
+	case "code", "vscode", "visual studio code":
+		return "code"
+	case "alacritty":
+		return "Alacritty"
+	case "kitty":
+		return "kitty"
+	case "gnome-terminal":
+		return "org.gnome.Terminal"
+	case "konsole":
+		return "org.kde.konsole"
+	case "tilix":
+		return "com.gexperts.Tilix"
+	case "terminator":
+		return "Terminator"
+	case "xfce4-terminal":
+		return "Xfce4-terminal"
+	case "mate-terminal":
+		return "Mate-terminal"
+	default:
+		return terminalName
+	}
+}
+
 // GetWlrctlAppID returns the wlroots app_id for a terminal name.
 func GetWlrctlAppID(terminalName string) string {
 	switch strings.ToLower(terminalName) {
+	case "ghostty":
+		return "com.mitchellh.ghostty"
 	case "code", "vscode", "visual studio code":
 		return "code"
 	case "alacritty":

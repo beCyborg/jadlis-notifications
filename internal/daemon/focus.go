@@ -211,9 +211,32 @@ func activateWindowTitleWithXdotool(windowTitle string) error {
 // TryActivateWindowByTitle uses the activate-window-by-title GNOME extension.
 // https://extensions.gnome.org/extension/5021/activate-window-by-title/
 // This method does NOT require unsafe_mode and works on GNOME 42+.
+//
+// It tries activateByWmClass first (reliable for Wayland-native terminals whose
+// WM class is a reverse-domain app ID, e.g. com.mitchellh.ghostty), then falls
+// back to activateBySubstring on the window title.
 func TryActivateWindowByTitle(terminalName, folderName string) error {
-	searchTerm := GetSearchTermWithFolder(terminalName, folderName)
+	// Try activateByWmClass first — more reliable than title substring search
+	// for Wayland-native terminals that use reverse-domain app IDs as WM class.
+	wmClass := GetGnomeWmClass(terminalName)
+	if wmClass != "" {
+		cmd := exec.Command("busctl", "--user", "call",
+			"org.gnome.Shell",
+			"/de/lucaswerkmeister/ActivateWindowByTitle",
+			"de.lucaswerkmeister.ActivateWindowByTitle",
+			"activateByWmClass", "s", wmClass,
+		)
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			outputStr := strings.TrimSpace(string(output))
+			if strings.Contains(outputStr, "true") {
+				return nil
+			}
+		}
+	}
 
+	// Fall back to substring title search.
+	searchTerm := GetSearchTermWithFolder(terminalName, folderName)
 	cmd := exec.Command("busctl", "--user", "call",
 		"org.gnome.Shell",
 		"/de/lucaswerkmeister/ActivateWindowByTitle",
