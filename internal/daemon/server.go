@@ -21,12 +21,12 @@ import (
 
 // focusInfo holds the focus target and folder for a notification.
 type focusInfo struct {
-	target         string
-	folder         string
-	windowID       string
-	windowTitle    string
-	wezTermPaneID  string
-	wezTermSocket  string
+	target        string
+	folder        string
+	windowID      string
+	windowTitle   string
+	wezTermPaneID string
+	wezTermSocket string
 }
 
 // Server is the notification daemon server
