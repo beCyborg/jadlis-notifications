@@ -93,7 +93,10 @@ func sendViaDaemon(title, body, cwd string) error {
 		focusWindowID = ""
 	}
 
-	_, err = client.SendNotification(title, body, focusTarget, folderName, focusWindowID, focusWindowTitle, 30)
+	// Capture WezTerm pane info only when the focus target is actually WezTerm.
+	wezTermPaneID, wezTermSocket := daemon.GetWezTermFocusHints(focusTarget)
+
+	_, err = client.SendNotification(title, body, focusTarget, folderName, focusWindowID, focusWindowTitle, wezTermPaneID, wezTermSocket, 30)
 	return err
 }
 

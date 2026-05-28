@@ -5,11 +5,14 @@
 package daemon
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // FocusMethod represents a method for focusing a window
@@ -35,28 +38,40 @@ func GetFocusMethods() []FocusMethod {
 // folderName is the project folder name used for title-based window search (may be empty).
 // It tries each method in order until one succeeds.
 func TryFocus(terminalName, folderName string) error {
-	return TryFocusWithHints(terminalName, folderName, "", "")
+	return TryFocusWithHints(terminalName, folderName, "", "", "", "")
 }
 
 // TryFocusWithWindowID preserves the previous API for callers that only have an exact X11 window ID.
 func TryFocusWithWindowID(terminalName, folderName, windowID string) error {
-	return TryFocusWithHints(terminalName, folderName, windowID, "")
+	return TryFocusWithHints(terminalName, folderName, windowID, "", "", "")
 }
 
 // TryFocusWithHints attempts exact focus using hook-time hints first, then falls back to
 // compositor-specific methods.
-func TryFocusWithHints(terminalName, folderName, windowID, windowTitle string) error {
-	var exactErr error
+// wezTermPaneID and wezTermSocket enable tab-level focus for WezTerm.
+//
+// For WezTerm, window-level focus runs first, then the pane switch runs after a short
+// delay. This ordering matters: GNOME's XDG Activation Token is processed asynchronously
+// after the window-level call and may restore the previously active tab if the pane
+// switch runs first. Running the pane switch last ensures it wins.
+// If all window-level methods fail but a pane ID is available, TryWezTermPane is tried
+// as a last resort (activate-pane also raises the window on WezTerm).
+func TryFocusWithHints(terminalName, folderName, windowID, windowTitle, wezTermPaneID, wezTermSocket string) error {
+	wezTermPaneID, wezTermSocket = normalizeWezTermFocusHints(terminalName, wezTermPaneID, wezTermSocket)
+	windowFocused := false
+	var exactErr, lastErr error
+
 	if strings.TrimSpace(windowID) != "" {
 		if err := tryX11WindowID(windowID); err == nil {
-			return nil
+			windowFocused = true
 		} else {
 			exactErr = err
 		}
 	}
-	if strings.TrimSpace(windowTitle) != "" {
+
+	if !windowFocused && strings.TrimSpace(windowTitle) != "" {
 		if err := tryWindowTitle(windowTitle); err == nil {
-			return nil
+			windowFocused = true
 		} else if exactErr != nil {
 			exactErr = fmt.Errorf("%v; exact title focus failed: %v", exactErr, err)
 		} else {
@@ -64,24 +79,116 @@ func TryFocusWithHints(terminalName, folderName, windowID, windowTitle string) e
 		}
 	}
 
-	methods := GetFocusMethods()
-
-	var lastErr error
-	for _, method := range methods {
-		if err := method.Fn(terminalName, folderName); err != nil {
-			lastErr = err
-			continue
+	if !windowFocused {
+		for _, method := range GetFocusMethods() {
+			if err := method.Fn(terminalName, folderName); err != nil {
+				lastErr = err
+				continue
+			}
+			windowFocused = true
+			break
 		}
+	}
+
+	if wezTermPaneID != "" {
+		// When multiple WezTerm windows are open, activateByWmClass may have raised
+		// the wrong one (both share the same WM class). Query the mux for the window
+		// title of the specific WezTerm window containing our pane, then use
+		// activateBySubstring to bring exactly that window to the front.
+		if wt := wezTermWindowTitle(wezTermPaneID, wezTermSocket); wt != "" {
+			cmd := exec.Command("busctl", "--user", "call",
+				"org.gnome.Shell",
+				"/de/lucaswerkmeister/ActivateWindowByTitle",
+				"de.lucaswerkmeister.ActivateWindowByTitle",
+				"activateBySubstring", "s", wt,
+			)
+			cmd.CombinedOutput() //nolint:errcheck // best-effort; non-GNOME systems will fail here
+		}
+
+		// Sleep briefly so GNOME's XDG Activation Token is processed before switching
+		// tabs — otherwise the token may restore the previously active tab and undo
+		// the pane switch.
+		time.Sleep(150 * time.Millisecond)
+		if err := TryWezTermPane(wezTermPaneID, wezTermSocket); err != nil && !windowFocused {
+			// Neither window-level focus nor pane switch succeeded.
+			if exactErr != nil && lastErr != nil {
+				return fmt.Errorf("%v; fallback focus failed, last error: %v; wezterm pane: %v", exactErr, lastErr, err)
+			}
+			if exactErr != nil {
+				return fmt.Errorf("%v; wezterm pane: %v", exactErr, err)
+			}
+			if lastErr != nil {
+				return fmt.Errorf("all focus methods failed, last error: %v; wezterm pane: %v", lastErr, err)
+			}
+			return fmt.Errorf("wezterm pane focus failed: %v", err)
+		}
+		// Pane switch succeeded, or window was already raised (pane switch is best-effort).
 		return nil
 	}
 
-	if exactErr != nil && lastErr != nil {
-		return fmt.Errorf("%v; fallback focus failed, last error: %v", exactErr, lastErr)
+	if !windowFocused {
+		if exactErr != nil && lastErr != nil {
+			return fmt.Errorf("%v; fallback focus failed, last error: %v", exactErr, lastErr)
+		}
+		if exactErr != nil {
+			return exactErr
+		}
+		return fmt.Errorf("all focus methods failed, last error: %v", lastErr)
 	}
-	if exactErr != nil {
-		return exactErr
+	return nil
+}
+
+// wezTermWindowTitle queries the WezTerm mux for the window title of the window
+// containing paneID. Used to raise the exact WezTerm window when multiple instances
+// are open (they share the same WM class and can't be distinguished via activateByWmClass).
+// Returns empty string on any failure.
+func wezTermWindowTitle(paneID, socketPath string) string {
+	paneIDInt, err := strconv.Atoi(paneID)
+	if err != nil {
+		return ""
 	}
-	return fmt.Errorf("all focus methods failed, last error: %v", lastErr)
+	cmd := exec.Command("wezterm", "cli", "--no-auto-start", "list", "--format", "json")
+	if strings.TrimSpace(socketPath) != "" {
+		cmd.Env = append(os.Environ(), "WEZTERM_UNIX_SOCKET="+socketPath)
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	var panes []struct {
+		PaneID      int    `json:"pane_id"`
+		WindowTitle string `json:"window_title"`
+	}
+	if err := json.Unmarshal(output, &panes); err != nil {
+		return ""
+	}
+	for _, p := range panes {
+		if p.PaneID == paneIDInt {
+			return p.WindowTitle
+		}
+	}
+	return ""
+}
+
+// TryWezTermPane activates a specific WezTerm pane by ID using the WezTerm CLI.
+// This switches to the exact tab/pane where Claude is running.
+// socketPath is passed via WEZTERM_UNIX_SOCKET env var (the CLI has no --unix-socket flag).
+func TryWezTermPane(paneID, socketPath string) error {
+	if _, err := exec.LookPath("wezterm"); err != nil {
+		return fmt.Errorf("wezterm not installed")
+	}
+
+	// --no-auto-start: fail instead of spawning a new mux server when socket is wrong.
+	cmd := exec.Command("wezterm", "cli", "--no-auto-start", "activate-pane", "--pane-id", paneID)
+	if strings.TrimSpace(socketPath) != "" {
+		cmd.Env = append(os.Environ(), "WEZTERM_UNIX_SOCKET="+socketPath)
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wezterm cli activate-pane failed: %w, output: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func tryX11WindowID(windowID string) error {
@@ -211,24 +318,60 @@ func activateWindowTitleWithXdotool(windowTitle string) error {
 // TryActivateWindowByTitle uses the activate-window-by-title GNOME extension.
 // https://extensions.gnome.org/extension/5021/activate-window-by-title/
 // This method does NOT require unsafe_mode and works on GNOME 42+.
+//
+// Search order:
+//  1. activateBySubstring with the folder-specific term, when available — ensures
+//     the correct project window is focused when multiple windows of the same app
+//     are open (e.g. two VS Code windows for different projects).
+//  2. activateByWmClass — reliable for Wayland-native terminals whose WM class is
+//     a reverse-domain app ID (e.g. com.mitchellh.ghostty, org.wezfurlong.wezterm)
+//     and whose window title does not contain the app name.
+//  3. activateBySubstring with the generic terminal name as a final fallback.
 func TryActivateWindowByTitle(terminalName, folderName string) error {
-	searchTerm := GetSearchTermWithFolder(terminalName, folderName)
+	gnomeActivate := func(method, arg string) bool {
+		cmd := exec.Command("busctl", "--user", "call",
+			"org.gnome.Shell",
+			"/de/lucaswerkmeister/ActivateWindowByTitle",
+			"de.lucaswerkmeister.ActivateWindowByTitle",
+			method, "s", arg,
+		)
+		output, err := cmd.CombinedOutput()
+		return err == nil && strings.Contains(strings.TrimSpace(string(output)), "true")
+	}
 
+	// Step 1: folder-specific substring search (e.g. VS Code with a project folder).
+	// Only attempted when GetSearchTermWithFolder produces a different term than the
+	// plain terminal name — i.e. when the folder name is actually being used.
+	folderTerm := GetSearchTermWithFolder(terminalName, folderName)
+	if folderTerm != GetSearchTerm(terminalName) {
+		if gnomeActivate("activateBySubstring", folderTerm) {
+			return nil
+		}
+	}
+
+	// Step 2: WM class match — most reliable for Wayland-native terminals.
+	if wmClass := GetGnomeWmClass(terminalName); wmClass != "" {
+		if gnomeActivate("activateByWmClass", wmClass) {
+			return nil
+		}
+	}
+
+	// Step 3: generic substring fallback.
+	genericTerm := GetSearchTerm(terminalName)
 	cmd := exec.Command("busctl", "--user", "call",
 		"org.gnome.Shell",
 		"/de/lucaswerkmeister/ActivateWindowByTitle",
 		"de.lucaswerkmeister.ActivateWindowByTitle",
-		"activateBySubstring", "s", searchTerm,
+		"activateBySubstring", "s", genericTerm,
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("activate-window-by-title extension not available: %w, output: %s", err, string(output))
 	}
-	// busctl can succeed (exit code 0) even when no window was activated.
-	// The extension returns a boolean; ensure we only treat "true" as success.
+	// busctl can succeed (exit 0) even when no window was activated; check the boolean.
 	outputStr := strings.TrimSpace(string(output))
 	if strings.Contains(outputStr, "false") || outputStr == "" {
-		return fmt.Errorf("activate-window-by-title: no window activated for %q (output: %s)", searchTerm, outputStr)
+		return fmt.Errorf("activate-window-by-title: no window activated for %q (output: %s)", genericTerm, outputStr)
 	}
 	return nil
 }

@@ -104,9 +104,43 @@ func getClaudeNotificationsDesktopEntryPath() string {
 	return dataHome + "/applications/" + claudeNotificationsDesktopEntryID + ".desktop"
 }
 
+// GetGnomeWmClass returns the WM_CLASS used by the activate-window-by-title
+// GNOME Shell extension for activateByWmClass calls.
+// For Wayland-native apps this is the app_id in reverse-domain format.
+func GetGnomeWmClass(terminalName string) string {
+	switch strings.ToLower(terminalName) {
+	case "ghostty":
+		return "com.mitchellh.ghostty"
+	case "wezterm":
+		return "org.wezfurlong.wezterm"
+	case "code", "vscode", "visual studio code":
+		return "code"
+	case "alacritty":
+		return "Alacritty"
+	case "kitty":
+		return "kitty"
+	case "gnome-terminal":
+		return "org.gnome.Terminal"
+	case "konsole":
+		return "org.kde.konsole"
+	case "tilix":
+		return "com.gexperts.Tilix"
+	case "terminator":
+		return "Terminator"
+	case "xfce4-terminal":
+		return "Xfce4-terminal"
+	case "mate-terminal":
+		return "Mate-terminal"
+	default:
+		return terminalName
+	}
+}
+
 // GetWlrctlAppID returns the wlroots app_id for a terminal name.
 func GetWlrctlAppID(terminalName string) string {
 	switch strings.ToLower(terminalName) {
+	case "ghostty":
+		return "com.mitchellh.ghostty"
 	case "code", "vscode", "visual studio code":
 		return "code"
 	case "alacritty":
@@ -255,4 +289,38 @@ func getTerminatorWindowTitle() string {
 	}
 
 	return strings.TrimSpace(string(output))
+}
+
+// GetWezTermPaneID returns the WezTerm pane ID from the environment.
+func GetWezTermPaneID() string {
+	return strings.TrimSpace(os.Getenv("WEZTERM_PANE"))
+}
+
+// GetWezTermSocketPath returns the WezTerm Unix socket path from the environment.
+func GetWezTermSocketPath() string {
+	return strings.TrimSpace(os.Getenv("WEZTERM_UNIX_SOCKET"))
+}
+
+// IsWezTermTerminalName reports whether terminalName identifies WezTerm.
+func IsWezTermTerminalName(terminalName string) bool {
+	switch strings.ToLower(strings.TrimSpace(terminalName)) {
+	case "wezterm", "wezterm-gui", "org.wezfurlong.wezterm", "org.wezfurlong.wezterm.desktop", "com.github.wez.wezterm":
+		return true
+	default:
+		return false
+	}
+}
+
+// GetWezTermFocusHints returns WezTerm-specific focus hints only when the
+// detected focus target is WezTerm. WEZTERM_* variables are often inherited by
+// GUI apps launched from WezTerm, so they must not be trusted for other targets.
+func GetWezTermFocusHints(terminalName string) (paneID, socketPath string) {
+	return normalizeWezTermFocusHints(terminalName, GetWezTermPaneID(), GetWezTermSocketPath())
+}
+
+func normalizeWezTermFocusHints(terminalName, paneID, socketPath string) (string, string) {
+	if !IsWezTermTerminalName(terminalName) {
+		return "", ""
+	}
+	return strings.TrimSpace(paneID), strings.TrimSpace(socketPath)
 }
