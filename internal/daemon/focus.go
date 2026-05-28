@@ -5,6 +5,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -90,6 +91,20 @@ func TryFocusWithHints(terminalName, folderName, windowID, windowTitle, wezTermP
 	}
 
 	if wezTermPaneID != "" {
+		// When multiple WezTerm windows are open, activateByWmClass may have raised
+		// the wrong one (both share the same WM class). Query the mux for the window
+		// title of the specific WezTerm window containing our pane, then use
+		// activateBySubstring to bring exactly that window to the front.
+		if wt := wezTermWindowTitle(wezTermPaneID, wezTermSocket); wt != "" {
+			cmd := exec.Command("busctl", "--user", "call",
+				"org.gnome.Shell",
+				"/de/lucaswerkmeister/ActivateWindowByTitle",
+				"de.lucaswerkmeister.ActivateWindowByTitle",
+				"activateBySubstring", "s", wt,
+			)
+			cmd.CombinedOutput() //nolint:errcheck // best-effort; non-GNOME systems will fail here
+		}
+
 		// Sleep briefly so GNOME's XDG Activation Token is processed before switching
 		// tabs — otherwise the token may restore the previously active tab and undo
 		// the pane switch.
@@ -121,6 +136,38 @@ func TryFocusWithHints(terminalName, folderName, windowID, windowTitle, wezTermP
 		return fmt.Errorf("all focus methods failed, last error: %v", lastErr)
 	}
 	return nil
+}
+
+// wezTermWindowTitle queries the WezTerm mux for the window title of the window
+// containing paneID. Used to raise the exact WezTerm window when multiple instances
+// are open (they share the same WM class and can't be distinguished via activateByWmClass).
+// Returns empty string on any failure.
+func wezTermWindowTitle(paneID, socketPath string) string {
+	paneIDInt, err := strconv.Atoi(paneID)
+	if err != nil {
+		return ""
+	}
+	cmd := exec.Command("wezterm", "cli", "--no-auto-start", "list", "--format", "json")
+	if strings.TrimSpace(socketPath) != "" {
+		cmd.Env = append(os.Environ(), "WEZTERM_UNIX_SOCKET="+socketPath)
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	var panes []struct {
+		PaneID      int    `json:"pane_id"`
+		WindowTitle string `json:"window_title"`
+	}
+	if err := json.Unmarshal(output, &panes); err != nil {
+		return ""
+	}
+	for _, p := range panes {
+		if p.PaneID == paneIDInt {
+			return p.WindowTitle
+		}
+	}
+	return ""
 }
 
 // TryWezTermPane activates a specific WezTerm pane by ID using the WezTerm CLI.
