@@ -25,6 +25,8 @@ import (
 const macOSPermissionDeniedMessage = "Notification permission denied. Enable in System Settings > Notifications."
 
 var execCommand = exec.Command
+var beeepNotify = beeep.Notify
+var notifierGOOS = runtime.GOOS
 
 // NotificationPermissionDeniedError indicates macOS rejected the native
 // ClaudeNotifier path because notification permission is denied for the app.
@@ -480,7 +482,7 @@ func (n *Notifier) sendWithBeeep(title, message, appIcon, sound string) error {
 	// - macOS/Linux: Use unique AppName to prevent notification grouping/replacement,
 	//   allowing multiple notifications to be displayed simultaneously.
 	originalAppName := beeep.AppName
-	if platform.IsWindows() {
+	if isNotifierWindows() {
 		beeep.AppName = "Claude Code Notifications"
 	} else {
 		beeep.AppName = fmt.Sprintf("claude-notif-%d", time.Now().UnixNano())
@@ -490,9 +492,13 @@ func (n *Notifier) sendWithBeeep(title, message, appIcon, sound string) error {
 	}()
 
 	// Send notification using beeep with proper title and clean message.
-	err := beeep.Notify(title, message, appIcon)
+	err := notifyViaBeeep(title, message, appIcon)
+	if err != nil && isWindowsToastFallbackSuccess(err) {
+		logging.Warn("beeep.Notify returned a Windows toast false positive after PowerShell fallback: %v (AppName=%q, title=%q)", err, beeep.AppName, title)
+		err = nil
+	}
 	if err != nil {
-		logging.Error("beeep.Notify failed on %s: %v (AppName=%q, title=%q)", runtime.GOOS, err, beeep.AppName, title)
+		logging.Error("beeep.Notify failed on %s: %v (AppName=%q, title=%q)", notifierGOOS, err, beeep.AppName, title)
 	} else {
 		logging.Debug("Desktop notification sent via beeep: title=%s", title)
 	}
@@ -507,6 +513,35 @@ func (n *Notifier) sendWithBeeep(title, message, appIcon, sound string) error {
 	n.playSoundDetached(sound)
 
 	return err
+}
+
+func notifyViaBeeep(title, message, appIcon string) error {
+	if isNotifierWindows() {
+		// go-toast initializes WinRT COM for the current OS thread. Pin the call
+		// so RoInitialize, XmlDocument creation, LoadXml, and Show execute on the
+		// same initialized apartment.
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}
+	return beeepNotify(title, message, appIcon)
+}
+
+func isNotifierWindows() bool {
+	return notifierGOOS == "windows"
+}
+
+func isWindowsToastFallbackSuccess(err error) bool {
+	if err == nil || !isNotifierWindows() || !strings.Contains(err.Error(), "doc.LoadXml(tmpl)") {
+		return false
+	}
+
+	var joined interface{ Unwrap() []error }
+	if !errors.As(err, &joined) {
+		return false
+	}
+
+	parts := joined.Unwrap()
+	return len(parts) == 1 && strings.Contains(parts[0].Error(), "doc.LoadXml(tmpl)")
 }
 
 // playSoundDetached spawns a detached child process to play the sound.
