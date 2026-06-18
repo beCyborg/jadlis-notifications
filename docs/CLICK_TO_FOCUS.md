@@ -118,4 +118,18 @@ If the Python API is not available, the plugin falls back to standard `tmux sele
 
 ## Windows
 
-Notifications only, no click-to-focus.
+Clicking a notification raises the terminal **window** that started the task. Enabled by the same `clickToFocus` flag; no extra configuration.
+
+How it works (no admin rights, no COM server):
+
+1. When the notification fires, the plugin walks up the process tree to the terminal window hosting Claude (Windows Terminal, VS Code, conhost, ConEmu, …) and records its window handle, PID, title and project folder.
+2. The toast is shown via [go-toast](https://git.sr.ht/~jackmordaunt/go-toast) with **protocol activation**, carrying that context in a `claude-notify-focus:` URI. A per-user handler for that scheme is registered under `HKCU\Software\Classes` (idempotent; refreshed if the binary moves).
+3. Clicking the toast launches the URI, which re-runs the binary's `focus-windows` subcommand. It re-finds the window (by handle, then PID, then title/folder) and raises it with `ShowWindow` + `SetForegroundWindow`.
+
+### Scope: window-level only
+
+Focus is **window-level**. Windows Terminal runs every tab and split pane inside one top-level window, and Win32 can only raise *windows*, not tabs — there is no public API to focus a specific WT tab by session (it's an open feature request on Windows Terminal). Additionally, when several WT windows run under a single `WindowsTerminal.exe` process, the plugin can resolve the terminal process but not which of its windows hosts a given tab. So:
+
+- A single terminal window → raised reliably.
+- Multiple **separate** windows → best effort (the foreground / most-recent window is chosen); it may not be the exact one when the session is in a background window.
+- **Tabs and split panes** inside a window are not individually targetable.

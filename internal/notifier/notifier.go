@@ -165,6 +165,18 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
 		}
 	}
 
+	// Windows: use go-toast with protocol activation for click-to-focus support
+	if platform.IsWindows() && n.cfg.Notifications.Desktop.ClickToFocus {
+		if err := sendWindowsNotification(title, cleanMessage, appIcon, n.cfg, cwd); err != nil {
+			logging.Warn("Windows click-to-focus notification failed, falling back to beeep: %v", err)
+			// Fall through to beeep
+		} else {
+			logging.Debug("Desktop notification sent via Windows click-to-focus: title=%s", title)
+			n.playSoundDetached(statusInfo.Sound)
+			return nil
+		}
+	}
+
 	// Standard path: beeep (Windows, Linux fallback)
 	return n.sendWithBeeep(title, cleanMessage, appIcon, statusInfo.Sound)
 }
