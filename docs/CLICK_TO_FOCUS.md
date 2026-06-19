@@ -133,3 +133,20 @@ Focus is **window-level**. Windows Terminal runs every tab and split pane inside
 - A single terminal window → raised reliably.
 - Multiple **separate** windows → best effort (the foreground / most-recent window is chosen); it may not be the exact one when the session is in a background window.
 - **Tabs and split panes** inside a window are not individually targetable.
+
+### Terminal bell (tab indicator)
+
+Separately from click-to-focus, the `terminalBell` option (on by default) now works on Windows. A Claude Code hook is spawned with its *own* hidden console (`CREATE_NO_WINDOW`), so writing to its own `CONOUT$` would ring a private, invisible console. Instead the plugin detaches that console and attaches to an ancestor's (`AttachConsole`) — the Claude session's console, which is the visible pane's ConPTY — then writes a BEL byte there. The BEL reaches the **originating** Windows Terminal pane and WT flags that tab's bell indicator.
+
+Unlike click-to-focus, the bell **is** tab-accurate: because the BEL is written into that specific pane's console, Windows Terminal knows exactly which tab to flag — even with multiple tabs or split panes in one window. It's the one reliable per-tab "this session finished" signal.
+
+It is best-effort and never blocks or fails a notification: if no ancestor console can be reached, the write is a silent, debug-logged no-op — the same way the Unix `/dev/tty` path degrades.
+
+**Visibility (Windows Terminal `bellStyle`).** The background-tab bell glyph appears with WT's default settings — no configuration needed. For a more attention-grabbing cue that also flashes the window and taskbar (useful when the session is in a background window), set in WT settings:
+
+```jsonc
+// Settings → Profiles → Defaults → Advanced → Bell notification style
+"bellStyle": "all"            // or ["audible", "window", "taskbar"]
+```
+
+Set `"terminalBell": false` in the plugin config to disable the bell entirely.
