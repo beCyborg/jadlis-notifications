@@ -14,7 +14,6 @@ import (
 	"github.com/777genius/claude-notifications/internal/config"
 	"github.com/777genius/claude-notifications/internal/logging"
 	"github.com/777genius/claude-notifications/internal/winfocus"
-	"github.com/gen2brain/beeep"
 )
 
 // windowsToastAppID is the AppID shown in Action Center. Kept fixed (matching
@@ -39,9 +38,9 @@ func EnsureClaudeNotificationsApp() error { return nil }
 
 // --- Linux daemon helpers: stubs so the notifier package compiles on Windows ---
 
-// sendLinuxNotification falls back to beeep on Windows (the Linux daemon is Linux-only).
+// sendLinuxNotification returns an error on Windows (the Linux daemon is Linux-only).
 func sendLinuxNotification(title, body, appIcon string, cfg *config.Config, cwd string) error {
-	return beeep.Notify(title, body, appIcon)
+	return fmt.Errorf("Linux notifications not available on Windows")
 }
 
 // IsDaemonAvailable returns false on Windows.

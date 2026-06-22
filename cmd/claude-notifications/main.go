@@ -500,6 +500,12 @@ func runFocusWindows(args []string) {
 		fmt.Fprintf(os.Stderr, "focus-windows: %v\n", err)
 		os.Exit(1)
 	}
+	if !ctx.HasTarget() {
+		err := fmt.Errorf("focus-windows: empty focus context")
+		logging.Warn("%v", err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 	if err := winfocus.Focus(ctx); err != nil {
 		logging.Warn("focus-windows: %v", err)
 		fmt.Fprintf(os.Stderr, "focus-windows: %v\n", err)
