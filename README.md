@@ -179,7 +179,7 @@ Linux focus methods (tried in order): GNOME extension, GNOME Shell Eval, GNOME F
 
 **iTerm2 note:** to open the exact iTerm2 tab or split pane, enable `iTerm2 > Settings > General > Magic > Enable Python API`. If you just toggled it, restart iTerm2 once. Without the Python API, the plugin falls back to app-level iTerm activation instead of exact tab targeting.
 
-**Windows** — notifications only, no click-to-focus.
+**Windows** — clicking a notification raises the originating terminal **window** (Windows Terminal, VS Code, conhost, …) via a protocol-activated toast. Window-level only: tab/split-pane targeting isn't possible (one window hosts all tabs), and picking among multiple WT windows in one process is best-effort. See the guide for details.
 
 See **[Click-to-Focus Guide](docs/CLICK_TO_FOCUS.md)** for configuration details.
 
