@@ -57,7 +57,7 @@ Smart notifications for Claude Code with click-to-focus, git branch display, and
 ### Prerequisites
 
 - Claude Code
-- **Windows users:** Git Bash (included with [Git for Windows](https://git-scm.com/download/win)) or WSL
+- **Windows users:** Git Bash (included with [Git for Windows](https://git-scm.com/download/win))
 - **macOS/Linux users:** No additional software required
 
 ### Quick Install (Recommended)
@@ -67,6 +67,8 @@ One command to install everything:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/777genius/claude-notifications-go/main/bin/bootstrap.sh | bash
 ```
+
+> Windows users: run this from Git Bash. If you run it from PowerShell and `bash` opens WSL, the installer would target Linux paths and binaries instead of Windows.
 
 Then restart Claude Code and optionally run `/claude-notifications-go:settings` to configure sounds.
 
