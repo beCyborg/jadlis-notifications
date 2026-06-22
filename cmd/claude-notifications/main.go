@@ -19,7 +19,7 @@ import (
 	"github.com/777genius/claude-notifications/internal/winfocus"
 )
 
-const version = "1.39.4"
+const version = "1.40.0"
 const windowsLazyUpdateRetryAfter = time.Hour
 
 var (
