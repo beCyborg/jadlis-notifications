@@ -28,6 +28,25 @@ import (
 	"github.com/777genius/claude-notifications/pkg/jsonl"
 )
 
+// maxNotifyDelaySeconds bounds notifyDelaySeconds so the desktop grace-period
+// delay can never push the hook past the timeout configured in hooks.json.
+const maxNotifyDelaySeconds = 25
+
+// Test seams for the focus-aware / delayed desktop notification path.
+var (
+	isTerminalFocused = notifier.IsTerminalFocused
+	sleepFunc         = time.Sleep
+)
+
+type notificationDelivery struct {
+	webhookQueued    bool
+	desktopDelivered bool
+}
+
+func (d notificationDelivery) delivered() bool {
+	return d.webhookQueued || d.desktopDelivered
+}
+
 // HookData represents the data received from Claude Code hooks
 type HookData struct {
 	TranscriptPath string `json:"transcript_path"`
@@ -373,14 +392,15 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 		return nil
 	}
 
-	// Release lock on exit if acquired
-	defer func() {
+	releaseContentLock := func() {
 		if contentLockAcquired {
 			if err := h.dedupMgr.ReleaseContentLock(hookData.SessionID); err != nil {
 				logging.Warn("Failed to release content lock: %v", err)
 			}
+			contentLockAcquired = false
 		}
-	}()
+	}
+	defer releaseContentLock()
 
 	// Check for duplicate message content (3 minutes = 180 seconds window)
 	isDuplicate, err := h.stateMgr.IsDuplicateMessage(hookData.SessionID, message, 180)
@@ -391,15 +411,23 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 		return nil
 	}
 
-	// Update last notification time and message
-	if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status, message); err != nil {
-		logging.Warn("Failed to update last notification: %v", err)
-	}
+	// Release the cross-hook content lock before any delivery work. Desktop
+	// delivery may intentionally sleep for notifyDelaySeconds, and holding this
+	// lock during that delay would make concurrent hooks skip notifications.
+	releaseContentLock()
 
 	// Send notifications
 	bench.Start("notify.send")
-	h.sendNotifications(status, body, actions, hookData.SessionID, hookData.CWD)
+	delivery := h.sendNotifications(status, body, actions, hookData.SessionID, hookData.CWD)
 	bench.Elapsed("notify.send")
+
+	if delivery.delivered() {
+		if err := h.stateMgr.UpdateLastNotification(hookData.SessionID, status, message); err != nil {
+			logging.Warn("Failed to update last notification: %v", err)
+		}
+	} else {
+		logging.Debug("No notification delivery was recorded (all channels disabled, suppressed, or failed)")
+	}
 
 	logging.Debug("=== Hook completed: %s ===", hookEvent)
 	return nil
@@ -558,13 +586,16 @@ func joinMessageParts(body, actions string) string {
 	return body + " " + actions
 }
 
-// sendNotifications sends desktop and webhook notifications.
+// sendNotifications sends desktop and webhook notifications and reports whether
+// at least one user-visible channel was queued or delivered.
 //
 // body is the summary text (no metadata prefix, no action segments).
 // actions is the formatted action summary (e.g. "📝 1 new  ▶ 2 cmds  ⏱ 41s") or "".
-func (h *Handler) sendNotifications(status analyzer.Status, body, actions, sessionID, cwd string) {
+func (h *Handler) sendNotifications(status analyzer.Status, body, actions, sessionID, cwd string) notificationDelivery {
 	// Add panic recovery to prevent notification failures from crashing the plugin
 	defer errorhandler.HandlePanic()
+
+	var delivery notificationDelivery
 
 	sessionName := sessionname.GenerateSessionLabel(sessionID)
 	gitBranch := platform.GetGitBranch(cwd)
@@ -584,17 +615,9 @@ func (h *Handler) sendNotifications(status analyzer.Status, body, actions, sessi
 
 	statusStr := string(status)
 
-	// Send desktop notification (check per-status enabled)
-	if h.cfg.IsStatusDesktopEnabled(statusStr) {
-		if err := h.notifierSvc.SendDesktop(status, enhancedMessage, sessionID, cwd); err != nil {
-			h.maybeEmitDesktopPermissionGuidance(err)
-			errorhandler.HandleError(err, "Failed to send desktop notification")
-		}
-	} else {
-		logging.Debug("Desktop notification disabled for status: %s", statusStr)
-	}
-
-	// Send webhook notification (async, check per-status enabled)
+	// Send webhook notification first (async, check per-status enabled). Webhook
+	// delivery is independent of the desktop focus/delay handling below, so the
+	// notifyDelaySeconds grace period never holds it up.
 	if h.cfg.IsStatusWebhookEnabled(statusStr) {
 		h.webhookSvc.SendAsyncWithContext(webhook.SendContext{
 			Status:        status,
@@ -607,9 +630,54 @@ func (h *Handler) sendNotifications(status analyzer.Status, body, actions, sessi
 			RawBody:       body,
 			ActionSummary: actions,
 		})
+		delivery.webhookQueued = true
 	} else {
 		logging.Debug("Webhook notification disabled for status: %s", statusStr)
 	}
+
+	// Send desktop notification (check per-status enabled)
+	if h.cfg.IsStatusDesktopEnabled(statusStr) {
+		delivery.desktopDelivered = h.sendDesktopNotification(status, enhancedMessage, sessionID, cwd)
+	} else {
+		logging.Debug("Desktop notification disabled for status: %s", statusStr)
+	}
+
+	return delivery
+}
+
+// sendDesktopNotification delivers the desktop notification, honoring the
+// notifyDelaySeconds grace period and the notifyOnlyWhenUnfocused suppression
+// from issue #93.
+//
+// When notifyDelaySeconds > 0 the hook waits that many seconds (bounded by
+// maxNotifyDelaySeconds to stay within the hook timeout) before delivering, so a
+// quick task you are already watching can finish before any banner appears. When
+// notifyOnlyWhenUnfocused is set, the notification is dropped if the terminal
+// window has OS focus at delivery time - checked after the delay, so the two
+// options compose into "only notify once I have looked away". Both options are
+// independent and default off; webhook delivery is unaffected.
+func (h *Handler) sendDesktopNotification(status analyzer.Status, message, sessionID, cwd string) bool {
+	if delay := h.cfg.GetNotifyDelaySeconds(); delay > 0 {
+		if delay > maxNotifyDelaySeconds {
+			logging.Warn("notifyDelaySeconds=%d exceeds the hook timeout budget; clamping to %ds", delay, maxNotifyDelaySeconds)
+			delay = maxNotifyDelaySeconds
+		}
+		logging.Debug("Delaying desktop notification by %ds", delay)
+		sleepFunc(time.Duration(delay) * time.Second)
+	}
+
+	if h.cfg.ShouldNotifyOnlyWhenUnfocused() && isTerminalFocused(sessionID, cwd) {
+		logging.Debug("Desktop notification suppressed: terminal window has focus")
+		return false
+	}
+
+	if err := h.notifierSvc.SendDesktop(status, message, sessionID, cwd); err != nil {
+		h.maybeEmitDesktopPermissionGuidance(err)
+		errorhandler.HandleError(err, "Failed to send desktop notification")
+		return false
+	}
+
+	return true
 }
 
 // isSubagentTranscript checks if the transcript path indicates a subagent session.
