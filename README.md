@@ -68,7 +68,7 @@ One command to install everything:
 curl -fsSL https://raw.githubusercontent.com/777genius/claude-notifications-go/main/bin/bootstrap.sh | bash
 ```
 
-> Windows users: run this from Git Bash. If you run it from PowerShell and `bash` opens WSL, the installer would target Linux paths and binaries instead of Windows.
+> Windows users: open Git Bash from the Start menu and run this command there. Do not run the `curl ... | bash` command from PowerShell or Windows Terminal if `bash` opens WSL, because that targets Linux paths and binaries instead of Windows.
 
 Then restart Claude Code and optionally run `/claude-notifications-go:settings` to configure sounds.
 
@@ -149,7 +149,7 @@ If the binary auto-update didn't work (e.g. no internet at the time), run `/clau
 
 **Windows-specific features:**
 - Native Toast notifications (Windows 10+)
-- Works in PowerShell, CMD, Git Bash, or WSL
+- After installation, notifications work in PowerShell, CMD, Git Bash, or WSL
 - MP3/WAV/OGG/FLAC audio playback via native Windows APIs
 - System sounds not accessible - use built-in MP3s or custom files
 
