@@ -332,6 +332,38 @@ func TestLoadFromPluginRoot_WithEnvironmentVariables(t *testing.T) {
 	assert.Equal(t, "https://example.com/hook", cfg.Notifications.Webhook.URL)
 }
 
+func TestLoadFromPluginRoot_ExpandsUnsetPluginRootFromResolvedPath(t *testing.T) {
+	pluginRoot := t.TempDir()
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+
+	configDir := filepath.Join(pluginRoot, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "config.json")
+	data := []byte(`{
+		"notifications": {"desktop": {"appIcon": "${CLAUDE_PLUGIN_ROOT}/claude_icon.png"}},
+		"statuses": {"task_complete": {"sound": "${CLAUDE_PLUGIN_ROOT}/sounds/task-complete.mp3"}}
+	}`)
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFromPluginRoot(pluginRoot)
+	if err != nil {
+		t.Fatalf("LoadFromPluginRoot() error = %v", err)
+	}
+
+	wantIcon := filepath.Join(pluginRoot, "claude_icon.png")
+	if cfg.Notifications.Desktop.AppIcon != wantIcon {
+		t.Errorf("app icon = %q, want %q", cfg.Notifications.Desktop.AppIcon, wantIcon)
+	}
+	wantSound := filepath.Join(pluginRoot, "sounds", "task-complete.mp3")
+	if got := cfg.Statuses["task_complete"].Sound; got != wantSound {
+		t.Errorf("sound = %q, want %q", got, wantSound)
+	}
+}
+
 // === Tests for ApplyDefaults ===
 
 func TestApplyDefaults(t *testing.T) {
