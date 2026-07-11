@@ -250,17 +250,17 @@ func load(path, pluginRoot string) (*Config, error) {
 	}
 
 	// Expand environment variables in paths
-	config.Notifications.Desktop.AppIcon = filepath.Clean(expandEnv(config.Notifications.Desktop.AppIcon, pluginRoot))
+	config.Notifications.Desktop.AppIcon = expandPath(config.Notifications.Desktop.AppIcon, pluginRoot)
 	config.Notifications.Webhook.URL = platform.ExpandEnv(config.Notifications.Webhook.URL)
 
 	// Expand environment variables in sound paths
 	for status, info := range config.Statuses {
-		info.Sound = filepath.Clean(expandEnv(info.Sound, pluginRoot))
+		info.Sound = expandPath(info.Sound, pluginRoot)
 		config.Statuses[status] = info
 	}
 
 	// Apply defaults for missing fields
-	config.ApplyDefaults()
+	config.applyDefaults(pluginRoot)
 
 	return config, nil
 }
@@ -272,6 +272,14 @@ func expandEnv(value, pluginRoot string) string {
 		}
 		return os.Getenv(key)
 	})
+}
+
+func expandPath(value, pluginRoot string) string {
+	expanded := expandEnv(value, pluginRoot)
+	if expanded == "" {
+		return ""
+	}
+	return filepath.Clean(expanded)
 }
 
 // GetStableConfigDir returns the stable config directory outside the plugin cache.
@@ -390,6 +398,10 @@ func migrateConfig(oldPath, stablePath string) error {
 
 // ApplyDefaults fills in missing fields with default values
 func (c *Config) ApplyDefaults() {
+	c.applyDefaults("")
+}
+
+func (c *Config) applyDefaults(pluginRoot string) {
 	// Desktop defaults
 	if c.Notifications.Desktop.Volume == 0 {
 		c.Notifications.Desktop.Volume = 1.0 // Default to full volume
@@ -419,7 +431,7 @@ func (c *Config) ApplyDefaults() {
 	}
 
 	// Status defaults
-	defaults := DefaultConfig()
+	defaults := defaultConfig(pluginRoot)
 	if c.Statuses == nil {
 		c.Statuses = defaults.Statuses
 	} else {
