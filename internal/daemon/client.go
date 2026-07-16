@@ -113,7 +113,7 @@ func (c *Client) send(req Request) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set deadlines
 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
@@ -172,7 +172,7 @@ func StartDaemonOnDemand() bool {
 	if err == nil {
 		cmd.Stdout = devNull
 		cmd.Stderr = devNull
-		defer devNull.Close()
+		defer func() { _ = devNull.Close() }()
 	}
 
 	if err := cmd.Start(); err != nil {
