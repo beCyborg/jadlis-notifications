@@ -478,6 +478,7 @@ func TestManager_UpdateState_QuestionWithoutTool(t *testing.T) {
 
 func TestManager_Cleanup_OldFiles(t *testing.T) {
 	mgr := NewManager()
+	mgr.tempDir = t.TempDir()
 
 	// Create two state files
 	session1 := "test-cleanup-1"
@@ -515,6 +516,7 @@ func TestManager_Cleanup_OldFiles(t *testing.T) {
 
 func TestManager_Cleanup_EmptyDirectory(t *testing.T) {
 	mgr := NewManager()
+	mgr.tempDir = t.TempDir()
 
 	// Should not error on empty directory
 	err := mgr.Cleanup(60)
