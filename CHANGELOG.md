@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plugin paths resolve without an ambient `CLAUDE_PLUGIN_ROOT`** - configuration defaults use the executable-derived plugin root, preserve literal dollar signs in paths, retain omitted fields in partial status overrides, and keep explicit empty sound settings ([#107](https://github.com/777genius/claude-notifications-go/issues/107), [#109](https://github.com/777genius/claude-notifications-go/pull/109)).
 - **macOS release binaries retain compatibility with macOS 12 and later** - Darwin builds now set and verify a 12.0 deployment target instead of inheriting the runner OS version.
 - **Windows installer guidance consistently points users to Git Bash** - bootstrap and download failures no longer suggest unsupported shell paths.
+- **Windows terminal bell fallback handles cyclic process snapshots** - ancestor discovery no longer returns or retries duplicate process IDs.
 
 ## [1.40.0] - 2026-06-22
 
