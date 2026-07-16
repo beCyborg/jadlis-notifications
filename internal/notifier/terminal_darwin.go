@@ -173,7 +173,7 @@ func EnsureClaudeNotificationsApp() error {
 	if err := os.MkdirAll(iconsetDir, 0755); err != nil {
 		return err
 	}
-	defer os.RemoveAll(iconsetDir)
+	defer func() { _ = os.RemoveAll(iconsetDir) }()
 
 	// Generate icon sizes using sips
 	sizes := []struct {

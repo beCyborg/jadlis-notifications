@@ -81,6 +81,44 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, intPtr(10), cfg.Notifications.SuppressQuestionAfterTaskCompleteSeconds)
 }
 
+func TestLoadConfig_PartialStatusesPreserveDefaults(t *testing.T) {
+	pluginRoot := t.TempDir()
+	t.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	configJSON := `{
+		"statuses": {
+			"task_complete": {"sound": "custom.mp3"},
+			"question": {"title": "Ask"},
+			"review_complete": null,
+			"api_error": {"sound": ""}
+		}
+	}`
+	require.NoError(t, os.WriteFile(configPath, []byte(configJSON), 0o600))
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, "✅ Completed", cfg.Statuses["task_complete"].Title)
+	assert.Equal(t, "custom.mp3", cfg.Statuses["task_complete"].Sound)
+	assert.Equal(t, "Ask", cfg.Statuses["question"].Title)
+	assert.Equal(t, filepath.Join(pluginRoot, "sounds", "question.mp3"), cfg.Statuses["question"].Sound)
+	assert.Equal(t, "🔍 Review", cfg.Statuses["review_complete"].Title)
+	assert.Equal(t, filepath.Join(pluginRoot, "sounds", "review-complete.mp3"), cfg.Statuses["review_complete"].Sound)
+	assert.Equal(t, "🔴 API Error: 401", cfg.Statuses["api_error"].Title)
+	assert.Empty(t, cfg.Statuses["api_error"].Sound)
+}
+
+func TestDefaultConfig_UnresolvedPluginRootUsesCurrentDirectory(t *testing.T) {
+	for _, pluginRoot := range []string{"$CLAUDE_PLUGIN_ROOT", "${CLAUDE_PLUGIN_ROOT}"} {
+		t.Run(pluginRoot, func(t *testing.T) {
+			t.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
+			cfg := DefaultConfig()
+			assert.Equal(t, "claude_icon.png", cfg.Notifications.Desktop.AppIcon)
+			assert.Equal(t, filepath.Join("sounds", "task-complete.mp3"), cfg.Statuses["task_complete"].Sound)
+		})
+	}
+}
+
 func TestLoadConfigNotExists(t *testing.T) {
 	// Load non-existent config should return defaults
 	cfg, err := Load("/nonexistent/config.json")
@@ -333,7 +371,7 @@ func TestLoadFromPluginRoot_WithEnvironmentVariables(t *testing.T) {
 }
 
 func TestLoadFromPluginRoot_ExpandsUnsetPluginRootFromResolvedPath(t *testing.T) {
-	pluginRoot := t.TempDir()
+	pluginRoot := filepath.Join(t.TempDir(), "$literal", "plugin")
 	setTestHome(t, t.TempDir())
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("TEST_SOUND_PATH", filepath.Join(pluginRoot, "custom.mp3"))
@@ -373,6 +411,33 @@ func TestLoadFromPluginRoot_ExpandsUnsetPluginRootFromResolvedPath(t *testing.T)
 	}
 	if got := cfg.Statuses["api_error"].Sound; got != "" {
 		t.Errorf("empty sound = %q, want empty", got)
+	}
+	wantDefaultSound := filepath.Join(pluginRoot, "sounds", "review-complete.mp3")
+	if got := cfg.Statuses["review_complete"].Sound; got != wantDefaultSound {
+		t.Errorf("default sound = %q, want %q", got, wantDefaultSound)
+	}
+}
+
+func TestLoadFromPluginRoot_PreservesDollarInDefaultPaths(t *testing.T) {
+	pluginRoot := filepath.Join(t.TempDir(), "$literal", "plugin")
+	setTestHome(t, t.TempDir())
+	configDir := filepath.Join(pluginRoot, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFromPluginRoot(pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := cfg.Notifications.Desktop.AppIcon, filepath.Join(pluginRoot, "claude_icon.png"); got != want {
+		t.Errorf("app icon = %q, want %q", got, want)
+	}
+	if got, want := cfg.Statuses["task_complete"].Sound, filepath.Join(pluginRoot, "sounds", "task-complete.mp3"); got != want {
+		t.Errorf("default sound = %q, want %q", got, want)
 	}
 }
 

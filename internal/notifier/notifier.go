@@ -244,7 +244,7 @@ func runClaudeNotifierApp(appPath string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir for ClaudeNotifier launch: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stdoutPath := filepath.Join(tempDir, "stdout.log")
 	stderrPath := filepath.Join(tempDir, "stderr.log")

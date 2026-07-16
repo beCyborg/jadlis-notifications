@@ -19,7 +19,7 @@ import (
 	"github.com/777genius/claude-notifications/internal/winfocus"
 )
 
-const version = "1.40.0"
+const version = "1.40.1"
 const windowsLazyUpdateRetryAfter = time.Hour
 
 var (
@@ -213,7 +213,7 @@ func handleHook(hookEvent string) {
 		errorhandler.HandleCriticalError(err, "Failed to initialize logger")
 		os.Exit(1)
 	}
-	defer logging.Close()
+	defer func() { _ = logging.Close() }()
 
 	// Create handler
 	handler, err := hooks.NewHandler(pluginRoot)
@@ -471,7 +471,7 @@ func runPlaySound(args []string) {
 		fmt.Fprintf(os.Stderr, "play-sound: failed to init player: %v\n", err)
 		os.Exit(1)
 	}
-	defer player.Close()
+	defer func() { _ = player.Close() }()
 
 	if err := player.Play(soundPath); err != nil {
 		fmt.Fprintf(os.Stderr, "play-sound: failed to play %s: %v\n", soundPath, err)
@@ -490,7 +490,7 @@ func runFocusWindows(args []string) {
 
 	// Best-effort logging to notification-debug.log to aid click diagnostics.
 	if _, err := logging.InitLogger(getPluginRoot()); err == nil {
-		defer logging.Close()
+		defer func() { _ = logging.Close() }()
 	}
 	logging.Debug("focus-windows invoked: %s", args[0])
 

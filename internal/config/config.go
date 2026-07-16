@@ -152,10 +152,19 @@ func defaultConfig(resolvedPluginRoot string) *Config {
 	if pluginRoot == "" {
 		pluginRoot = platform.ExpandEnv("${CLAUDE_PLUGIN_ROOT}")
 	}
-	if pluginRoot == "" || pluginRoot == "${CLAUDE_PLUGIN_ROOT}" {
+	if isUnresolvedPluginRoot(pluginRoot) {
 		pluginRoot = "."
 	}
+	return buildDefaultConfig(pluginRoot)
+}
 
+func isUnresolvedPluginRoot(pluginRoot string) bool {
+	return pluginRoot == "" ||
+		pluginRoot == "$CLAUDE_PLUGIN_ROOT" ||
+		pluginRoot == "${CLAUDE_PLUGIN_ROOT}"
+}
+
+func buildDefaultConfig(pluginRoot string) *Config {
 	return &Config{
 		Notifications: NotificationsConfig{
 			Desktop: DesktopConfig{
@@ -244,8 +253,15 @@ func load(path, pluginRoot string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	config := defaultConfig(pluginRoot)
+	config := defaultConfigForLoad(pluginRoot)
+	statusDefaults := make(map[string]StatusInfo, len(config.Statuses))
+	for status, info := range config.Statuses {
+		statusDefaults[status] = info
+	}
 	if err := json.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	if err := mergeStatusOverrides(data, config, statusDefaults); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -263,6 +279,45 @@ func load(path, pluginRoot string) (*Config, error) {
 	config.applyDefaults(pluginRoot)
 
 	return config, nil
+}
+
+func defaultConfigForLoad(pluginRoot string) *Config {
+	resolvedRoot := pluginRoot
+	if resolvedRoot == "" {
+		resolvedRoot = os.Getenv("CLAUDE_PLUGIN_ROOT")
+	}
+	if isUnresolvedPluginRoot(resolvedRoot) {
+		return buildDefaultConfig(".")
+	}
+
+	// Keep defaults symbolic until expandPath processes config values. Injecting
+	// a resolved root here would make literal '$' segments expand a second time.
+	return buildDefaultConfig("${CLAUDE_PLUGIN_ROOT}")
+}
+
+// mergeStatusOverrides preserves defaults for fields omitted from an individual
+// status object. encoding/json otherwise replaces map values with zero structs.
+func mergeStatusOverrides(data []byte, config *Config, defaults map[string]StatusInfo) error {
+	var rawConfig struct {
+		Statuses map[string]json.RawMessage `json:"statuses"`
+	}
+	if err := json.Unmarshal(data, &rawConfig); err != nil {
+		return err
+	}
+	if rawConfig.Statuses == nil {
+		return nil
+	}
+	if config.Statuses == nil {
+		config.Statuses = make(map[string]StatusInfo)
+	}
+	for status, rawStatus := range rawConfig.Statuses {
+		info := defaults[status]
+		if err := json.Unmarshal(rawStatus, &info); err != nil {
+			return fmt.Errorf("invalid status %q: %w", status, err)
+		}
+		config.Statuses[status] = info
+	}
+	return nil
 }
 
 func expandEnv(value, pluginRoot string) string {
@@ -377,14 +432,14 @@ func migrateConfig(oldPath, stablePath string) error {
 		return err
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath) // cleanup on any error path
+	defer func() { _ = os.Remove(tmpPath) }() // cleanup on any error path
 
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
 	if err := tmpFile.Close(); err != nil {
