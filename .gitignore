@@ -1,6 +1,10 @@
 # Binaries - exclude all platform-specific binaries
-# These are downloaded from GitHub Releases during setup
+# These are downloaded from GitHub Releases during setup.
+# Exception: this fork ships the patched darwin/arm64 binary in the repo so the
+# plugin works straight after `claude plugin install`, with the same file also
+# published as a release asset for the hook-wrapper recovery path.
 bin/claude-notifications-*
+!bin/claude-notifications-darwin-arm64
 bin/*.exe
 bin/*.dll
 bin/*.so
