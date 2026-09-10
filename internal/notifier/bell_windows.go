@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/777genius/claude-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
 	"golang.org/x/sys/windows"
 )
 

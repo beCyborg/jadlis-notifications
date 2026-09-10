@@ -5,7 +5,7 @@ package notifier
 import (
 	"testing"
 
-	"github.com/777genius/claude-notifications/internal/state"
+	"github.com/beCyborg/jadlis-notifications/internal/state"
 )
 
 func TestGhosttyFrontmostTerminalMatchesSession_ExactCWD(t *testing.T) {

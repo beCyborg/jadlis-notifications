@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/777genius/claude-notifications/internal/analyzer"
-	"github.com/777genius/claude-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/analyzer"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

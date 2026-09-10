@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/777genius/claude-notifications/internal/config"
-	"github.com/777genius/claude-notifications/internal/platform"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/platform"
 )
 
 // terminalBundleIDMap maps TERM_PROGRAM values to macOS bundle identifiers

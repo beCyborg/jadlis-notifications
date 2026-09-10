@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/claude-notifications/internal/audio"
-	"github.com/777genius/claude-notifications/internal/errorhandler"
-	"github.com/777genius/claude-notifications/internal/hooks"
-	"github.com/777genius/claude-notifications/internal/logging"
-	"github.com/777genius/claude-notifications/internal/notifier"
-	"github.com/777genius/claude-notifications/internal/winfocus"
+	"github.com/beCyborg/jadlis-notifications/internal/audio"
+	"github.com/beCyborg/jadlis-notifications/internal/errorhandler"
+	"github.com/beCyborg/jadlis-notifications/internal/hooks"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/notifier"
+	"github.com/beCyborg/jadlis-notifications/internal/winfocus"
 )
 
 const version = "1.41.0"

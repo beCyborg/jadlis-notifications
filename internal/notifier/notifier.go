@@ -15,12 +15,12 @@ import (
 
 	"github.com/gen2brain/beeep"
 
-	"github.com/777genius/claude-notifications/internal/analyzer"
-	"github.com/777genius/claude-notifications/internal/audio"
-	"github.com/777genius/claude-notifications/internal/config"
-	"github.com/777genius/claude-notifications/internal/errorhandler"
-	"github.com/777genius/claude-notifications/internal/logging"
-	"github.com/777genius/claude-notifications/internal/platform"
+	"github.com/beCyborg/jadlis-notifications/internal/analyzer"
+	"github.com/beCyborg/jadlis-notifications/internal/audio"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/errorhandler"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/platform"
 )
 
 const macOSPermissionDeniedMessage = "Notification permission denied. Enable in System Settings > Notifications."
