@@ -1,5 +1,5 @@
 diff --git a/internal/hooks/hooks.go b/internal/hooks/hooks.go
-index 6bad81c..bcd459b 100644
+index 6bad81c..9fbcec2 100644
 --- a/internal/hooks/hooks.go
 +++ b/internal/hooks/hooks.go
 @@ -601,7 +601,9 @@ func (h *Handler) sendNotifications(status analyzer.Status, body, actions, sessi
@@ -13,19 +13,32 @@ index 6bad81c..bcd459b 100644
  
  	// Format: "[sessionname|branch folder] message" or "[sessionname folder] message"
  	var enhancedMessage string
+@@ -725,7 +727,9 @@ func (h *Handler) shouldEmitPermissionGuidance() bool {
+ 		return true
+ 	}
+ 
+-	stampDir := filepath.Join(cacheDir, "claude-notifications-go")
++	// Fork: own cache namespace so the stamp does not collide with an
++	// upstream claude-notifications-go install running side by side.
++	stampDir := filepath.Join(cacheDir, "jadlis-notifications")
+ 	stampPath := filepath.Join(stampDir, "macos-notification-permission-reminder")
+ 
+ 	if info, err := os.Stat(stampPath); err == nil {
 diff --git a/internal/notifier/notifier.go b/internal/notifier/notifier.go
-index da994f2..f91f819 100644
+index da994f2..ce35931 100644
 --- a/internal/notifier/notifier.go
 +++ b/internal/notifier/notifier.go
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,9 @@
  package notifier
  
  import (
++	"bufio"
++	"bytes"
 +	"encoding/json"
  	"errors"
  	"fmt"
  	"net/url"
-@@ -115,6 +116,11 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
+@@ -115,6 +118,11 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
  		}
  	}
  
@@ -37,23 +50,34 @@ index da994f2..f91f819 100644
  	timeSensitive := isTimeSensitiveStatus(status)
  
  	// Get app icon path if configured
-@@ -727,3 +733,37 @@ func extractSessionInfo(message string) (sessionName, gitBranch, cleanMessage st
+@@ -145,12 +153,12 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
+ 				}
+ 				logging.Warn("ClaudeNotifier failed on macOS, falling back to beeep: %v", err)
+ 			} else {
+-				logging.Debug("Desktop notification sent via ClaudeNotifier/terminal-notifier: title=%s", title)
++				logging.Debug("Desktop notification sent via ClaudeNotifier/terminal-notifier: title=%s subtitle=%s", title, subtitle)
+ 				n.playSoundDetached(statusInfo.Sound)
+ 				return nil
+ 			}
+ 		} else {
+-			logging.Warn("ClaudeNotifier not available on macOS, falling back to beeep (run /claude-notifications-go:init to install it)")
++			logging.Warn("ClaudeNotifier not available on macOS, falling back to beeep (run /jadlis-notifications:init to install it)")
+ 		}
+ 	}
+ 
+@@ -727,3 +735,123 @@ func extractSessionInfo(message string) (sessionName, gitBranch, cleanMessage st
  
  	return sessionName, gitBranch, cleanMessage
  }
 +
-+// readClaudeSessionTitle returns the session's custom title persisted by
-+// Claude Code at <configDir>/projects/<cwd-slug>/<sessionID>/custom-title.json,
-+// or "" when absent. Local patch, not upstream.
-+func readClaudeSessionTitle(sessionID, cwd string) string {
-+	if sessionID == "" || cwd == "" {
-+		return ""
-+	}
++// claudeSessionPaths returns the per-session directory and the transcript path
++// Claude Code uses for sessionID under cwd: <configDir>/projects/<cwd-slug>/…
++func claudeSessionPaths(sessionID, cwd string) (sessionDir, transcript string) {
 +	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
 +	if configDir == "" {
 +		home, err := os.UserHomeDir()
 +		if err != nil {
-+			return ""
++			return "", ""
 +		}
 +		configDir = filepath.Join(home, ".claude")
 +	}
@@ -63,7 +87,33 @@ index da994f2..f91f819 100644
 +		}
 +		return '-'
 +	}, cwd)
-+	data, err := os.ReadFile(filepath.Join(configDir, "projects", slug, sessionID, "custom-title.json"))
++	projectDir := filepath.Join(configDir, "projects", slug)
++	return filepath.Join(projectDir, sessionID), filepath.Join(projectDir, sessionID+".jsonl")
++}
++
++// readClaudeSessionTitle returns the Claude Code session title, or "" when the
++// session has none. Local patch, not upstream. Sources, in order:
++//  1. <session-dir>/custom-title.json — written by /rename and by a hook's
++//     sessionTitle (custom titles);
++//  2. the transcript <sessionID>.jsonl — the last `custom-title` entry, else the
++//     last `ai-title` entry. Claude Code's native background namer (2.1.26x+)
++//     writes only ai-title lines there and never touches custom-title.json.
++func readClaudeSessionTitle(sessionID, cwd string) string {
++	if sessionID == "" || cwd == "" {
++		return ""
++	}
++	sessionDir, transcript := claudeSessionPaths(sessionID, cwd)
++	if sessionDir == "" {
++		return ""
++	}
++	if t := readCustomTitleFile(filepath.Join(sessionDir, "custom-title.json")); t != "" {
++		return t
++	}
++	return readTranscriptTitle(transcript)
++}
++
++func readCustomTitleFile(path string) string {
++	data, err := os.ReadFile(path)
 +	if err != nil || len(data) > 8192 {
 +		return ""
 +	}
@@ -74,4 +124,149 @@ index da994f2..f91f819 100644
 +		return ""
 +	}
 +	return strings.TrimSpace(v.CustomTitle)
++}
++
++// readTranscriptTitle scans a Claude Code transcript (JSONL) for title entries.
++// Title lines are tiny; lines longer than the read buffer (tool results, file
++// snapshots) cannot be titles and are skipped without being materialised.
++func readTranscriptTitle(path string) string {
++	f, err := os.Open(path)
++	if err != nil {
++		return ""
++	}
++	defer func() { _ = f.Close() }()
++
++	const maxLine = 1 << 20
++	r := bufio.NewReaderSize(f, maxLine)
++	var custom, ai string
++	for {
++		line, err := r.ReadSlice('\n')
++		if errors.Is(err, bufio.ErrBufferFull) {
++			// Drain the rest of an oversized line.
++			for errors.Is(err, bufio.ErrBufferFull) {
++				_, err = r.ReadSlice('\n')
++			}
++			if err != nil {
++				break
++			}
++			continue
++		}
++		if len(line) > 0 {
++			applyTitleLine(line, &custom, &ai)
++		}
++		if err != nil {
++			break
++		}
++	}
++	if custom != "" {
++		return custom
++	}
++	return ai
++}
++
++func applyTitleLine(line []byte, custom, ai *string) {
++	isCustom := bytes.Contains(line, []byte(`"type":"custom-title"`))
++	isAI := !isCustom && bytes.Contains(line, []byte(`"type":"ai-title"`))
++	if !isCustom && !isAI {
++		return
++	}
++	var v struct {
++		Type        string `json:"type"`
++		CustomTitle string `json:"customTitle"`
++		AITitle     string `json:"aiTitle"`
++	}
++	if json.Unmarshal(bytes.TrimSpace(line), &v) != nil {
++		return
++	}
++	switch v.Type {
++	case "custom-title":
++		if t := strings.TrimSpace(v.CustomTitle); t != "" {
++			*custom = t
++		}
++	case "ai-title":
++		if t := strings.TrimSpace(v.AITitle); t != "" {
++			*ai = t
++		}
++	}
++}
+diff --git a/internal/notifier/session_title_jadlis_test.go b/internal/notifier/session_title_jadlis_test.go
+new file mode 100644
+index 0000000..44d2ec9
+--- /dev/null
++++ b/internal/notifier/session_title_jadlis_test.go
+@@ -0,0 +1,75 @@
++package notifier
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func writeSessionFixture(t *testing.T, cwd, sid, customFile, transcript string) {
++	t.Helper()
++	configDir := t.TempDir()
++	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
++	sessionDir, transcriptPath := claudeSessionPaths(sid, cwd)
++	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
++		t.Fatal(err)
++	}
++	if customFile != "" {
++		if err := os.WriteFile(filepath.Join(sessionDir, "custom-title.json"), []byte(customFile), 0o644); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if transcript != "" {
++		if err := os.WriteFile(transcriptPath, []byte(transcript), 0o644); err != nil {
++			t.Fatal(err)
++		}
++	}
++}
++
++func TestReadClaudeSessionTitle_CustomFileWins(t *testing.T) {
++	writeSessionFixture(t, "/Users/x/Jadlis", "sid-1",
++		`{"customTitle":"Ручное имя"}`,
++		`{"type":"ai-title","aiTitle":"Автоимя","sessionId":"sid-1"}`+"\n")
++	if got := readClaudeSessionTitle("sid-1", "/Users/x/Jadlis"); got != "Ручное имя" {
++		t.Fatalf("got %q", got)
++	}
++}
++
++func TestReadClaudeSessionTitle_AITitleFromTranscript(t *testing.T) {
++	writeSessionFixture(t, "/Users/x/Jadlis", "sid-2", "",
++		`{"type":"user","message":{"role":"user","content":"hi"}}`+"\n"+
++			`{"type":"ai-title","aiTitle":"Первое имя","sessionId":"sid-2"}`+"\n"+
++			`{"type":"ai-title","aiTitle":"Поездка в Гданьск","sessionId":"sid-2"}`+"\n")
++	if got := readClaudeSessionTitle("sid-2", "/Users/x/Jadlis"); got != "Поездка в Гданьск" {
++		t.Fatalf("got %q", got)
++	}
++}
++
++func TestReadClaudeSessionTitle_TranscriptCustomBeatsAI(t *testing.T) {
++	writeSessionFixture(t, "/Users/x/Jadlis", "sid-3", "",
++		`{"type":"custom-title","customTitle":"Дайджест №2","sessionId":"sid-3"}`+"\n"+
++			`{"type":"ai-title","aiTitle":"Слаг после плана","sessionId":"sid-3"}`+"\n")
++	if got := readClaudeSessionTitle("sid-3", "/Users/x/Jadlis"); got != "Дайджест №2" {
++		t.Fatalf("got %q", got)
++	}
++}
++
++func TestReadClaudeSessionTitle_SkipsOversizedLines(t *testing.T) {
++	huge := `{"type":"user","message":{"content":"` + strings.Repeat("x", 3<<20) + `"}}` + "\n"
++	writeSessionFixture(t, "/Users/x/Jadlis", "sid-4", "",
++		huge+`{"type":"ai-title","aiTitle":"После длинной строки","sessionId":"sid-4"}`+"\n"+huge)
++	if got := readClaudeSessionTitle("sid-4", "/Users/x/Jadlis"); got != "После длинной строки" {
++		t.Fatalf("got %q", got)
++	}
++}
++
++func TestReadClaudeSessionTitle_Absent(t *testing.T) {
++	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
++	if got := readClaudeSessionTitle("nope", "/Users/x/Jadlis"); got != "" {
++		t.Fatalf("got %q", got)
++	}
++	if got := readClaudeSessionTitle("", "/Users/x/Jadlis"); got != "" {
++		t.Fatalf("got %q", got)
++	}
 +}
