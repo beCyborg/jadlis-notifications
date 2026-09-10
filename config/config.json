@@ -2,53 +2,45 @@
   "notifications": {
     "desktop": {
       "enabled": true,
-      "sound": true,
-      "volume": 1.0,
+      "sound": false,
+      "volume": 0.25,
+      "audioDevice": "",
       "appIcon": "${CLAUDE_PLUGIN_ROOT}/claude_icon.png",
       "clickToFocus": true,
-      "terminalBundleId": ""
+      "showSessionLabel": false,
+      "terminalBundleId": "com.googlecode.iterm2"
     },
     "webhook": {
       "enabled": false,
-      "preset": "slack",
+      "preset": "custom",
       "url": "",
-      "chat_id": "",
       "format": "json",
       "headers": {}
     },
-    "suppressQuestionAfterTaskCompleteSeconds": 12,
-    "suppressQuestionAfterAnyNotificationSeconds": 7,
+    "suppressQuestionAfterTaskCompleteSeconds": 7,
     "suppressForSubagents": true,
-    "suppressFilters": []
+    "teamMode": "wait-all"
   },
   "statuses": {
     "task_complete": {
-      "title": "✅ Completed",
+      "enabled": true,
+      "title": "✅ Задача выполнена",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/task-complete.mp3"
     },
     "review_complete": {
-      "title": "🔍 Review",
+      "enabled": true,
+      "title": "🔍 Ревью завершено",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/review-complete.mp3"
     },
     "question": {
-      "title": "❓ Question",
+      "enabled": true,
+      "title": "❓ Есть вопрос",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/question.mp3"
     },
     "plan_ready": {
-      "title": "📋 Plan",
+      "enabled": true,
+      "title": "📋 План готов",
       "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/plan-ready.mp3"
-    },
-    "session_limit_reached": {
-      "title": "⏱️ Session Limit Reached",
-      "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/question.mp3"
-    },
-    "api_error": {
-      "title": "🔴 API Error: 401",
-      "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/question.mp3"
-    },
-    "api_error_overloaded": {
-      "title": "🔴 API Error",
-      "sound": "${CLAUDE_PLUGIN_ROOT}/sounds/question.mp3"
     }
   }
 }
