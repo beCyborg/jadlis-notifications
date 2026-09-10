@@ -7,6 +7,10 @@ license; the full text is in [LICENSE](LICENSE).
 
 Fork base: upstream tag `v1.41.0`.
 
+Tag convention in this repository: a plain `vX.Y.Z` tag is a **fork** release and points at
+the merged commit, because `bin/install.sh` recovers the binary from this repository's
+`vX.Y.Z` release. Upstream tags are fetched into `refs/tags/upstream/*` instead.
+
 ## Changes made in this fork
 
 | # | Change | Where |
