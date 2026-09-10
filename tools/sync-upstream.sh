@@ -34,16 +34,19 @@ command -v go >/dev/null || { echo "ERROR: go not found" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "ERROR: working tree is dirty" >&2; exit 1; }
 
 # --- 1. upstream tag ---
+# In this fork the plain tag v<X> is the FORK's release (it must point at the
+# merged commit, because bin/install.sh downloads assets from the v<version>
+# release of this repository). Upstream tags are therefore fetched into a
+# separate refs/tags/upstream/* namespace instead of clobbering ours.
 git remote get-url upstream >/dev/null 2>&1 || \
     git remote add upstream "https://github.com/$UPSTREAM_REPO.git"
-echo "==> fetching upstream tags"
-git fetch --quiet --tags upstream
-git rev-parse -q --verify "refs/tags/v$VER" >/dev/null || {
+echo "==> fetching upstream tag v$VER"
+git fetch --quiet --force upstream "refs/tags/v$VER:refs/tags/upstream/v$VER" || {
     echo "ERROR: upstream has no tag v$VER" >&2; exit 1; }
 
 # --- 2. merge ---
-echo "==> merging v$VER into $(git rev-parse --abbrev-ref HEAD)"
-if ! git merge --no-commit --no-ff "v$VER"; then
+echo "==> merging upstream/v$VER into $(git rev-parse --abbrev-ref HEAD)"
+if ! git merge --no-commit --no-ff "upstream/v$VER"; then
     echo "" >&2
     echo "Merge conflicts. Resolve them, keeping the fork side for:" >&2
     echo "  .claude-plugin/  config/config.json  hooks/hooks.json  bin/stop-gate.sh" >&2
@@ -112,6 +115,7 @@ Done. Review the diff, then:
   claude plugin validate . --strict
   git add -A && git commit -m "chore: sync upstream v$VER"
   git push origin main
+  git tag -f v$VER && git push -f origin "v$VER"
   claude plugin tag . --push
 
   shasum -a 256 bin/$BIN | awk '{print \$1"  $BIN"}' > /tmp/checksums.txt
