@@ -13,6 +13,11 @@ claude plugin install jadlis-notifications@jadlis
 Installing it separately is usually unnecessary: it arrives as a dependency of `jadlis-claudecode`.
 No keys and no subscriptions; the patched `darwin/arm64` binary is committed to the repository.
 
+![Identical tabs, a notification carrying the session name, a click raising the right one](docs/img/hero-jadlis-notifications.webp)
+
+In words: on the left a dozen identical tabs, on the right a notification with the session name,
+and a click on it raises that very tab.
+
 This is a fork of [claude-notifications-go](https://github.com/777genius/claude-notifications-go)
 under GPL-3.0, published as my working setup rather than as a product.
 
@@ -27,6 +32,16 @@ under GPL-3.0, published as my working setup rather than as a product.
 | **How it sounds.** — | Sound is on, and the title also carries a session label. | Sound is off, the label is off, and a click raises the right iTerm2 tab. |
 
 ## How it works
+
+![A session event, the background-task gate, the notification on screen, a click on it](docs/img/how-jadlis-notifications.webp)
+
+Going in — an event from a Claude Code session.
+Inside — a gate counts unfinished background agents and workflows and holds the notification
+while that count is above zero.
+Coming out — a macOS notification whose click raises that session's tab.
+
+In words: session event → background-task gate → notification on screen → a click raises that
+very tab.
 
 The input is five Claude Code hooks: `Stop`, `SubagentStop`, `PreToolUse` (on `ExitPlanMode` and
 `AskUserQuestion`), `Notification` (on a permission prompt) and `TeammateIdle`.
@@ -106,7 +121,8 @@ background-task gate, `python3` (it takes `/usr/bin/python3`, which is always pr
 **How tokens get spent.** Not at all: no model is involved here. Hooks and a Go binary do the work,
 no tokens are spent.
 
-**Verified where I work:** my Mac, iTerm2 + tmux, Apple Silicon. Where else this works — [уточнить].
+**Verified where I work:** my Mac, iTerm2 + tmux, Apple Silicon. I have no other hardware at hand,
+and the release ships `darwin/arm64` only.
 
 **License.** Fork of [claude-notifications-go](https://github.com/777genius/claude-notifications-go)
 under GPL-3.0 — see [LICENSE](LICENSE); patches are listed in NOTICE.md.
