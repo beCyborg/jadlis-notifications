@@ -72,7 +72,14 @@ func TestPluginHooksUseExecFormWrapper(t *testing.T) {
 		if hook.Command != "sh" {
 			t.Fatalf("%s command = %q, want sh", hookEvent, hook.Command)
 		}
-		wantArgs := []string{"${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh", "handle-hook", expectedArg}
+		// Fork: the Stop hook goes through stop-gate.sh, which suppresses the
+		// notification while background agents/workflows are still pending and
+		// otherwise forwards the event to hook-wrapper.sh unchanged.
+		entrypoint := "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh"
+		if hookEvent == "Stop" {
+			entrypoint = "${CLAUDE_PLUGIN_ROOT}/bin/stop-gate.sh"
+		}
+		wantArgs := []string{entrypoint, "handle-hook", expectedArg}
 		if !reflect.DeepEqual(hook.Args, wantArgs) {
 			t.Fatalf("%s args = %#v, want %#v", hookEvent, hook.Args, wantArgs)
 		}

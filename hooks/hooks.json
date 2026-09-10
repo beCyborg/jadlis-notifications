@@ -41,7 +41,7 @@
             "type": "command",
             "command": "sh",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/bin/hook-wrapper.sh",
+              "${CLAUDE_PLUGIN_ROOT}/bin/stop-gate.sh",
               "handle-hook",
               "Stop"
             ],
