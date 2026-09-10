@@ -5,13 +5,13 @@
     },
     "metadata": {
         "description": "Уведомления Claude Code (форк claude-notifications-go)",
-        "version": "1.41.0"
+        "version": "1.41.1"
     },
     "plugins": [{
         "name": "jadlis-notifications",
         "source": "./",
         "description": "Уведомления Claude Code — форк claude-notifications-go с русскими заголовками и именем сессии в подзаголовке",
-        "version": "1.41.0",
+        "version": "1.41.1",
         "author": {
             "name": "777genius"
         },

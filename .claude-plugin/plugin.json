@@ -1,6 +1,6 @@
 {
     "name": "jadlis-notifications",
-    "version": "1.41.0",
+    "version": "1.41.1",
     "description": "Уведомления Claude Code — форк claude-notifications-go с русскими заголовками и именем сессии в подзаголовке",
     "author": {
         "name": "777genius"

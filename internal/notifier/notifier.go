@@ -1,6 +1,8 @@
 package notifier
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,7 +153,7 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
 				}
 				logging.Warn("ClaudeNotifier failed on macOS, falling back to beeep: %v", err)
 			} else {
-				logging.Debug("Desktop notification sent via ClaudeNotifier/terminal-notifier: title=%s", title)
+				logging.Debug("Desktop notification sent via ClaudeNotifier/terminal-notifier: title=%s subtitle=%s", title, subtitle)
 				n.playSoundDetached(statusInfo.Sound)
 				return nil
 			}
@@ -734,18 +736,14 @@ func extractSessionInfo(message string) (sessionName, gitBranch, cleanMessage st
 	return sessionName, gitBranch, cleanMessage
 }
 
-// readClaudeSessionTitle returns the session's custom title persisted by
-// Claude Code at <configDir>/projects/<cwd-slug>/<sessionID>/custom-title.json,
-// or "" when absent. Local patch, not upstream.
-func readClaudeSessionTitle(sessionID, cwd string) string {
-	if sessionID == "" || cwd == "" {
-		return ""
-	}
+// claudeSessionPaths returns the per-session directory and the transcript path
+// Claude Code uses for sessionID under cwd: <configDir>/projects/<cwd-slug>/…
+func claudeSessionPaths(sessionID, cwd string) (sessionDir, transcript string) {
 	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
 	if configDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return ""
+			return "", ""
 		}
 		configDir = filepath.Join(home, ".claude")
 	}
@@ -755,7 +753,33 @@ func readClaudeSessionTitle(sessionID, cwd string) string {
 		}
 		return '-'
 	}, cwd)
-	data, err := os.ReadFile(filepath.Join(configDir, "projects", slug, sessionID, "custom-title.json"))
+	projectDir := filepath.Join(configDir, "projects", slug)
+	return filepath.Join(projectDir, sessionID), filepath.Join(projectDir, sessionID+".jsonl")
+}
+
+// readClaudeSessionTitle returns the Claude Code session title, or "" when the
+// session has none. Local patch, not upstream. Sources, in order:
+//  1. <session-dir>/custom-title.json — written by /rename and by a hook's
+//     sessionTitle (custom titles);
+//  2. the transcript <sessionID>.jsonl — the last `custom-title` entry, else the
+//     last `ai-title` entry. Claude Code's native background namer (2.1.26x+)
+//     writes only ai-title lines there and never touches custom-title.json.
+func readClaudeSessionTitle(sessionID, cwd string) string {
+	if sessionID == "" || cwd == "" {
+		return ""
+	}
+	sessionDir, transcript := claudeSessionPaths(sessionID, cwd)
+	if sessionDir == "" {
+		return ""
+	}
+	if t := readCustomTitleFile(filepath.Join(sessionDir, "custom-title.json")); t != "" {
+		return t
+	}
+	return readTranscriptTitle(transcript)
+}
+
+func readCustomTitleFile(path string) string {
+	data, err := os.ReadFile(path)
 	if err != nil || len(data) > 8192 {
 		return ""
 	}
@@ -766,4 +790,68 @@ func readClaudeSessionTitle(sessionID, cwd string) string {
 		return ""
 	}
 	return strings.TrimSpace(v.CustomTitle)
+}
+
+// readTranscriptTitle scans a Claude Code transcript (JSONL) for title entries.
+// Title lines are tiny; lines longer than the read buffer (tool results, file
+// snapshots) cannot be titles and are skipped without being materialised.
+func readTranscriptTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+
+	const maxLine = 1 << 20
+	r := bufio.NewReaderSize(f, maxLine)
+	var custom, ai string
+	for {
+		line, err := r.ReadSlice('\n')
+		if errors.Is(err, bufio.ErrBufferFull) {
+			// Drain the rest of an oversized line.
+			for errors.Is(err, bufio.ErrBufferFull) {
+				_, err = r.ReadSlice('\n')
+			}
+			if err != nil {
+				break
+			}
+			continue
+		}
+		if len(line) > 0 {
+			applyTitleLine(line, &custom, &ai)
+		}
+		if err != nil {
+			break
+		}
+	}
+	if custom != "" {
+		return custom
+	}
+	return ai
+}
+
+func applyTitleLine(line []byte, custom, ai *string) {
+	isCustom := bytes.Contains(line, []byte(`"type":"custom-title"`))
+	isAI := !isCustom && bytes.Contains(line, []byte(`"type":"ai-title"`))
+	if !isCustom && !isAI {
+		return
+	}
+	var v struct {
+		Type        string `json:"type"`
+		CustomTitle string `json:"customTitle"`
+		AITitle     string `json:"aiTitle"`
+	}
+	if json.Unmarshal(bytes.TrimSpace(line), &v) != nil {
+		return
+	}
+	switch v.Type {
+	case "custom-title":
+		if t := strings.TrimSpace(v.CustomTitle); t != "" {
+			*custom = t
+		}
+	case "ai-title":
+		if t := strings.TrimSpace(v.AITitle); t != "" {
+			*ai = t
+		}
+	}
 }
