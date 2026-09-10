@@ -1,0 +1,19 @@
+# gitleaks config for jadlis-notifications.
+#
+# The fork carries the full history of upstream claude-notifications-go, which
+# contains three long-standing false positives. They cannot be edited out
+# without rewriting upstream history, so they are allowlisted by path.
+title = "jadlis-notifications"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Upstream false positives inherited from claude-notifications-go history"
+paths = [
+    # "Authorization: Bearer YOUR_TOKEN" placeholders in webhook docs
+    '''docs/webhooks/troubleshooting\.md''',
+    '''docs/webhooks/custom\.md''',
+    # "JOURNAL_PHASE=" test constant in a package upstream later deleted
+    '''internal/agentnotify/journal/journal_test\.go''',
+]
