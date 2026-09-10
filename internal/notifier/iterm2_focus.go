@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/claude-notifications/internal/config"
-	"github.com/777genius/claude-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
 )
 
 const iTerm2SessionIDEnv = "ITERM_SESSION_ID"

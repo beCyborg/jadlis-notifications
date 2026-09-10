@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/777genius/claude-notifications/internal/logging"
-	"github.com/777genius/claude-notifications/internal/platform"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/platform"
 )
 
 // Config represents the plugin configuration

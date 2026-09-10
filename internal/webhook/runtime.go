@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/claude-notifications/internal/analyzer"
-	"github.com/777genius/claude-notifications/internal/config"
-	"github.com/777genius/claude-notifications/internal/logging"
-	"github.com/777genius/claude-notifications/internal/platform"
-	"github.com/777genius/claude-notifications/internal/sessionname"
+	"github.com/beCyborg/jadlis-notifications/internal/analyzer"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/platform"
+	"github.com/beCyborg/jadlis-notifications/internal/sessionname"
 )
 
 var templatePattern = regexp.MustCompile(`\$\{\{\s*([^{}]+?)\s*\}\}`)

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/777genius/claude-notifications/internal/errorhandler"
-	"github.com/777genius/claude-notifications/internal/logging"
+	"github.com/beCyborg/jadlis-notifications/internal/errorhandler"
+	"github.com/beCyborg/jadlis-notifications/internal/logging"
 )
 
 // Example demonstrates the error handler usage with console output

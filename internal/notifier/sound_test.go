@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/777genius/claude-notifications/internal/config"
-	"github.com/777genius/claude-notifications/internal/platform"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/platform"
 )
 
 // TestPlaySoundWithBuiltInFiles tests sound playback with actual MP3 files if available

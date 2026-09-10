@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/777genius/claude-notifications/internal/audio"
+	"github.com/beCyborg/jadlis-notifications/internal/audio"
 )
 
 func main() {

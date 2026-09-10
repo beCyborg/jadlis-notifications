@@ -1,4 +1,4 @@
-module github.com/777genius/claude-notifications
+module github.com/beCyborg/jadlis-notifications
 
 go 1.21.5
 

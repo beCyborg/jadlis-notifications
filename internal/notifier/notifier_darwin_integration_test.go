@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/777genius/claude-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
 )
 
 func TestSendWithTerminalNotifier_Integration(t *testing.T) {

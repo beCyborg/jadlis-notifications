@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/777genius/claude-notifications/internal/analyzer"
-	"github.com/777genius/claude-notifications/internal/config"
+	"github.com/beCyborg/jadlis-notifications/internal/analyzer"
+	"github.com/beCyborg/jadlis-notifications/internal/config"
 )
 
 // makeCtx builds a SendContext for tests with the legacy fields populated.

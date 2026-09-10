@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/777genius/claude-notifications/internal/sounds"
+	"github.com/beCyborg/jadlis-notifications/internal/sounds"
 )
 
 func buildBinary(t *testing.T) string {
