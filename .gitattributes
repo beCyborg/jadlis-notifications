@@ -28,3 +28,6 @@
 *.jpeg binary
 *.ico binary
 *.exe binary
+
+# Prebuilt binary shipped by this fork
+bin/claude-notifications-darwin-arm64 binary
