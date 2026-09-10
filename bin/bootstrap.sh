@@ -15,8 +15,8 @@ NC='\033[0m'
 # Constants
 REPO="beCyborg/jadlis-notifications"
 MARKETPLACE_SOURCE="${BOOTSTRAP_MARKETPLACE_SOURCE:-$REPO}"
-MARKETPLACE_NAME="claude-notifications-go"
-PLUGIN_NAME="claude-notifications-go"
+MARKETPLACE_NAME="jadlis-notifications"
+PLUGIN_NAME="jadlis-notifications"
 PLUGIN_KEY="${PLUGIN_NAME}@${MARKETPLACE_NAME}"
 INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-https://raw.githubusercontent.com/${REPO}/main/bin/install.sh}"
 
@@ -662,8 +662,8 @@ if [ -z "$CLAUDE_HOME" ]; then
 fi
 
 INSTALLED_JSON="${CLAUDE_HOME}/plugins/installed_plugins.json"
-MARKETPLACE_NAME="claude-notifications-go"
-PLUGIN_KEY="claude-notifications-go@claude-notifications-go"
+MARKETPLACE_NAME="jadlis-notifications"
+PLUGIN_KEY="jadlis-notifications@jadlis-notifications"
 PLUGIN_ROOT=""
 
 if [ -f "$INSTALLED_JSON" ]; then
@@ -761,7 +761,7 @@ fi
 
 # Extra fallback: stable pointer written by hook-wrapper.sh at runtime
 if [ -z "$PLUGIN_ROOT" ]; then
-  _PTR_FILE="${CLAUDE_HOME}/claude-notifications-go/plugin-root"
+  _PTR_FILE="${CLAUDE_HOME}/jadlis-notifications/plugin-root"
   if [ -f "$_PTR_FILE" ]; then
     IFS= read -r PLUGIN_ROOT < "$_PTR_FILE" 2>/dev/null || true
   fi
