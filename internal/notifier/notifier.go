@@ -1,6 +1,7 @@
 package notifier
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -113,6 +114,11 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
 		} else {
 			subtitle = gitBranch
 		}
+	}
+
+	// Local patch: prefer the real Claude Code session title over "branch · folder".
+	if t := readClaudeSessionTitle(sessionID, cwd); t != "" {
+		subtitle = t
 	}
 
 	timeSensitive := isTimeSensitiveStatus(status)
@@ -726,4 +732,38 @@ func extractSessionInfo(message string) (sessionName, gitBranch, cleanMessage st
 	cleanMessage = strings.TrimSpace(message[closingIdx+1:])
 
 	return sessionName, gitBranch, cleanMessage
+}
+
+// readClaudeSessionTitle returns the session's custom title persisted by
+// Claude Code at <configDir>/projects/<cwd-slug>/<sessionID>/custom-title.json,
+// or "" when absent. Local patch, not upstream.
+func readClaudeSessionTitle(sessionID, cwd string) string {
+	if sessionID == "" || cwd == "" {
+		return ""
+	}
+	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if configDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		configDir = filepath.Join(home, ".claude")
+	}
+	slug := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '-'
+	}, cwd)
+	data, err := os.ReadFile(filepath.Join(configDir, "projects", slug, sessionID, "custom-title.json"))
+	if err != nil || len(data) > 8192 {
+		return ""
+	}
+	var v struct {
+		CustomTitle string `json:"customTitle"`
+	}
+	if json.Unmarshal(data, &v) != nil {
+		return ""
+	}
+	return strings.TrimSpace(v.CustomTitle)
 }
