@@ -87,4 +87,4 @@ fi
 
 After showing the list, tell the user:
 - They can preview any sound by asking "play <name>"
-- To configure sounds, use `/claude-notifications-go:settings`
+- To configure sounds, use `/jadlis-notifications:settings`

@@ -3,7 +3,7 @@
 
 set -uo pipefail
 
-REPO="777genius/claude-notifications-go"
+REPO="beCyborg/jadlis-notifications"
 RAW_URL="https://raw.githubusercontent.com/${REPO}/main/scripts/linux-focus-debug.sh"
 MARKETPLACE_NAME="claude-notifications-go"
 PLUGIN_NAME="claude-notifications-go"
