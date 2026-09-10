@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.41.0-jadlis — 2026-09-10
+
+Fork of [claude-notifications-go](https://github.com/777genius/claude-notifications-go) v1.41.0 as
+`jadlis-notifications`. GPL-3.0, same as upstream. Everything below this entry is the upstream
+changelog, kept verbatim.
+
+### Added
+- **Session title as the notification subtitle** — the subtitle is the Claude Code session name
+  from `custom-title.json` instead of `branch · folder`.
+- **Background-task gate on the Stop hook** — `bin/stop-gate.sh` + `bin/pending-bg-tasks.py`
+  suppress "task complete" while background agents or workflows are still pending; paths resolve
+  from the script's own directory and `${CLAUDE_PLUGIN_ROOT}`, log goes to
+  `${TMPDIR}/jadlis-notifications-stop-gate.log`.
+- **`tools/sync-upstream.sh`** — pull a newer upstream tag, re-apply the fork patches, rebuild the
+  binary, bump `plugin.json`, and print the release command.
+- **Committed `darwin/arm64` binary** — the plugin works right after install; the same file is a
+  release asset for the `hook-wrapper.sh` recovery path.
+
+### Changed
+- **No action-summary suffix** — `📝 1 new ▶ 2 cmds ⏱ 41s` is no longer appended to the body.
+- **Russian defaults** — «✅ Задача выполнена», «🔍 Ревью завершено», «❓ Есть вопрос»,
+  «📋 План готов»; sound off, session label off, click-to-focus on, `terminalBundleId`
+  `com.googlecode.iterm2`, `suppressForSubagents`, `teamMode: wait-all`,
+  `suppressQuestionAfterTaskCompleteSeconds: 7`.
+- **Fork identity** — plugin name, Go module path, installer `REPO`, and repository URL; the
+  installer pins downloads to this repository's `v<version>` release instead of someone else's
+  "latest".
+- **Docs** — bilingual `README.md` / `README.en.md`; the upstream README moved to
+  `docs/UPSTREAM-README.md`; attribution in `NOTICE.md`.
+
+### Removed
+- Upstream CI/release workflows (replaced by a single `plugin validate` workflow) and the
+  cross-promotion block printed by `bin/install.sh` / `bin/bootstrap.sh`.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
