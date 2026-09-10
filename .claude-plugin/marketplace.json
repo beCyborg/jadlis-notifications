@@ -1,31 +1,23 @@
 {
-    "name": "claude-notifications-go",
+    "name": "jadlis-notifications",
     "owner": {
-        "name": "777genius",
-        "email": "iliyazelenkog@gmail.com"
+        "name": "beCyborg"
     },
     "metadata": {
-        "description": "Smart notifications marketplace for Claude Code (Go implementation)",
+        "description": "Уведомления Claude Code (форк claude-notifications-go)",
         "version": "1.41.0"
     },
     "plugins": [{
-        "name": "claude-notifications-go",
+        "name": "jadlis-notifications",
         "source": "./",
-        "description": "Smart notifications for Claude Code task statuses (Go implementation)",
+        "description": "Уведомления Claude Code — форк claude-notifications-go с русскими заголовками и именем сессии в подзаголовке",
         "version": "1.41.0",
         "author": {
-            "name": "777genius",
-            "email": "iliyazelenkog@gmail.com"
+            "name": "777genius"
         },
-        "repository": "https://github.com/777genius/claude-notifications-go",
+        "repository": "https://github.com/beCyborg/jadlis-notifications",
         "license": "GPL-3.0",
-        "keywords": [
-            "notifications",
-            "alerts",
-            "productivity",
-            "go",
-            "hooks"
-        ],
+        "keywords": ["notifications", "alerts", "productivity", "go", "hooks"],
         "category": "productivity",
         "tags": ["notifications", "hooks", "alerts", "go"]
     }]

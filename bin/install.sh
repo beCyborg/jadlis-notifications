@@ -37,7 +37,7 @@ CURL_EXTRA_OPTS=()
 CURL_COMPAT_OPTS=()
 
 # GitHub repository (can be overridden via env for testing)
-REPO="777genius/claude-notifications-go"
+REPO="beCyborg/jadlis-notifications"
 RELEASES_BASE_URL="${RELEASES_BASE_URL:-https://github.com/${REPO}/releases}"
 LATEST_RELEASE_API_URL="${LATEST_RELEASE_API_URL:-https://api.github.com/repos/${REPO}/releases/latest}"
 DEFAULT_RELEASE_URL="${RELEASES_BASE_URL}/latest/download"
@@ -442,11 +442,33 @@ get_latest_release_tag() {
     printf '%s\n' "$tag"
 }
 
+# Fork-specific: the plugin version in .claude-plugin/plugin.json is also the
+# binary version, and every release of this fork is tagged v<version>.
+# Pinning to that tag makes recovery deterministic: a missing or mismatched
+# binary is always re-downloaded from THIS repository's v<version> release,
+# never from the "latest" release of some other repository.
+get_plugin_manifest_tag() {
+    local manifest=""
+    for manifest in "${SCRIPT_DIR}/../.claude-plugin/plugin.json" \
+                    "$(dirname "${BASH_SOURCE[0]}")/../.claude-plugin/plugin.json"; do
+        [ -f "$manifest" ] || continue
+        local ver=""
+        ver=$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$manifest" \
+              | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        if [ -n "$ver" ]; then
+            printf 'v%s\n' "$ver"
+            return 0
+        fi
+    done
+    return 1
+}
+
 pin_release_urls() {
     [ "$RELEASE_URL" = "$DEFAULT_RELEASE_URL" ] || return 0
 
     local tag=""
-    tag=$(get_latest_release_tag || true)
+    tag=$(get_plugin_manifest_tag || true)
+    [ -n "$tag" ] || tag=$(get_latest_release_tag || true)
 
     if [ -z "$tag" ]; then
         echo -e "${YELLOW}⚠ Could not resolve latest release tag, using /releases/latest fallback${NC}"
@@ -1326,13 +1348,13 @@ create_claude_notifications_app() {
 
     # Generate different icon sizes (silence sips stdout/stderr)
     sips -z 16 16 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null 2>&1
-    sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null 2>&1
+    sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null 2>&1  # privacy-ok: icon size suffix / GNOME extension UUID, not an e-mail
     sips -z 32 32 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null 2>&1
-    sips -z 64 64 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null 2>&1
+    sips -z 64 64 "$ICON_SRC" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null 2>&1  # privacy-ok: icon size suffix / GNOME extension UUID, not an e-mail
     sips -z 128 128 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128.png" >/dev/null 2>&1
-    sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null 2>&1
+    sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null 2>&1  # privacy-ok: icon size suffix / GNOME extension UUID, not an e-mail
     sips -z 256 256 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256.png" >/dev/null 2>&1
-    sips -z 512 512 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null 2>&1
+    sips -z 512 512 "$ICON_SRC" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null 2>&1  # privacy-ok: icon size suffix / GNOME extension UUID, not an e-mail
     cp "$ICON_SRC" "$ICONSET_DIR/icon_512x512.png" >/dev/null 2>&1
 
     # Convert to icns
@@ -1439,7 +1461,7 @@ setup_iterm2_venv() {
 # Install GNOME activate-window-by-title extension for Linux click-to-focus
 install_gnome_activate_window_extension() {
     local EXTENSION_ID=5021
-    local EXTENSION_UUID="activate-window-by-title@lucaswerkmeister.de"
+    local EXTENSION_UUID="activate-window-by-title@lucaswerkmeister.de"  # privacy-ok: icon size suffix / GNOME extension UUID, not an e-mail
 
     # Check if GNOME Shell is available
     if ! command -v gnome-shell &>/dev/null; then
@@ -1810,13 +1832,6 @@ main() {
         fi
     fi
     echo -e "${GREEN}✓${NC} Ready to use!"
-    echo ""
-    echo -e "${YELLOW}────────────────────────────────────────${NC}"
-    echo -e "${YELLOW}★${NC} ${BOLD}Boost your productivity${NC}"
-    echo -e "  Check out the advanced task manager for Claude"
-    echo -e "  with a convenient UI, from the creator of this plugin:"
-    echo -e "  ${GREEN}https://github.com/777genius/claude_agent_teams_ui${NC}"
-    echo -e "${YELLOW}────────────────────────────────────────${NC}"
     echo ""
 }
 

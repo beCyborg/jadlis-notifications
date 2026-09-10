@@ -1,6 +1,6 @@
 #!/bin/bash
 # bootstrap.sh - One-command install/update for claude-notifications plugin
-# Usage: curl -fsSL https://raw.githubusercontent.com/777genius/claude-notifications-go/main/bin/bootstrap.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/beCyborg/jadlis-notifications/main/bin/bootstrap.sh | bash
 
 set -euo pipefail
 
@@ -13,7 +13,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 # Constants
-REPO="777genius/claude-notifications-go"
+REPO="beCyborg/jadlis-notifications"
 MARKETPLACE_SOURCE="${BOOTSTRAP_MARKETPLACE_SOURCE:-$REPO}"
 MARKETPLACE_NAME="claude-notifications-go"
 PLUGIN_NAME="claude-notifications-go"
@@ -931,7 +931,7 @@ print_success() {
     echo ""
     echo -e "${BOLD}Next steps:${NC}"
     echo -e "  1. ${YELLOW}Restart Claude Code${NC} (exit and reopen)"
-    echo -e "  2. Run ${BOLD}/claude-notifications-go:settings${NC} to configure sounds"
+    echo -e "  2. Run ${BOLD}/jadlis-notifications:settings${NC} to configure sounds"
     if is_iterm2_detected; then
         echo -e "  3. In ${BOLD}iTerm2${NC}, enable ${BOLD}Settings → General → Magic → Python API${NC}"
     fi
@@ -940,13 +940,6 @@ print_success() {
     echo ""
     echo -e "${BLUE}One-liner to update in the future (same as install):${NC}"
     echo -e "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/bin/bootstrap.sh | bash"
-    echo ""
-    echo -e "${YELLOW}────────────────────────────────────────────${NC}"
-    echo -e "${YELLOW}★${NC} ${BOLD}Boost your productivity${NC}"
-    echo -e "  Check out the advanced task manager for Claude"
-    echo -e "  with a convenient UI, from the creator of this plugin:"
-    echo -e "  ${GREEN}https://github.com/777genius/claude_agent_teams_ui${NC}"
-    echo -e "${YELLOW}────────────────────────────────────────────${NC}"
     echo ""
 }
 

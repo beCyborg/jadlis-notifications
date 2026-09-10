@@ -13,7 +13,7 @@ Thank you for your interest in contributing to Claude Notifications!
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/777genius/claude-notifications-go
+git clone https://github.com/beCyborg/jadlis-notifications
 cd claude-notifications-go
 make build
 ```
@@ -30,11 +30,11 @@ make build
 # Restart Claude Code for hooks to take effect
 
 # Download binary and configure settings
-/claude-notifications-go:init
-/claude-notifications-go:settings
+/jadlis-notifications:init
+/jadlis-notifications:settings
 ```
 
-`/claude-notifications-go:init` will use your locally built binary from `bin/` if it exists, otherwise it downloads from GitHub Releases.
+`/jadlis-notifications:init` will use your locally built binary from `bin/` if it exists, otherwise it downloads from GitHub Releases.
 
 For repeatable local install/update testing without touching your real Claude setup, use:
 
@@ -170,4 +170,4 @@ See **[Release Checklist](docs/RELEASE.md)** for the full step-by-step guide.
 
 ## Reporting Issues
 
-Found a bug or have a feature request? [Open an issue](https://github.com/777genius/claude-notifications-go/issues).
+Found a bug or have a feature request? [Open an issue](https://github.com/beCyborg/jadlis-notifications/issues).

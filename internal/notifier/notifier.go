@@ -156,7 +156,7 @@ func (n *Notifier) SendDesktop(status analyzer.Status, message, sessionID, cwd s
 				return nil
 			}
 		} else {
-			logging.Warn("ClaudeNotifier not available on macOS, falling back to beeep (run /claude-notifications-go:init to install it)")
+			logging.Warn("ClaudeNotifier not available on macOS, falling back to beeep (run /jadlis-notifications:init to install it)")
 		}
 	}
 
