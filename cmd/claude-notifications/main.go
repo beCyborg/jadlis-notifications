@@ -273,7 +273,7 @@ func windowsLazyUpdateStampPath(pluginRoot string) string {
 	if err != nil || cacheDir == "" {
 		cacheDir = filepath.Join(pluginRoot, ".cache")
 	}
-	return filepath.Join(cacheDir, "claude-notifications-go", "windows-lazy-update-stamp")
+	return filepath.Join(cacheDir, "jadlis-notifications", "windows-lazy-update-stamp")
 }
 
 func windowsLazyUpdateRecentlyScheduled(stampPath, stampKey string) bool {

@@ -727,7 +727,9 @@ func (h *Handler) shouldEmitPermissionGuidance() bool {
 		return true
 	}
 
-	stampDir := filepath.Join(cacheDir, "claude-notifications-go")
+	// Fork: own cache namespace so the stamp does not collide with an
+	// upstream claude-notifications-go install running side by side.
+	stampDir := filepath.Join(cacheDir, "jadlis-notifications")
 	stampPath := filepath.Join(stampDir, "macos-notification-permission-reminder")
 
 	if info, err := os.Stat(stampPath); err == nil {

@@ -34,5 +34,10 @@ existing installation keeps working:
 - user config override: `~/.claude/claude-notifications-go/config.json`
 - iTerm2 Python API venv: `~/.claude/claude-notifications-go/iterm2-venv/`
 
+Everything else that used the plugin name moved into the fork's own namespace, so an upstream
+`claude-notifications-go` installed side by side cannot interfere:
+`${XDG_CACHE_HOME:-~/.cache}/jadlis-notifications/` (verified-version and reminder stamps) and
+`~/.claude/jadlis-notifications/plugin-root`.
+
 The upstream README is preserved at [docs/UPSTREAM-README.md](docs/UPSTREAM-README.md), and the
 upstream changelog at [CHANGELOG.md](CHANGELOG.md).

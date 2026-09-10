@@ -53,7 +53,9 @@ raises iTerm2 and the right tab.
 
 Your own values go into `~/.claude/claude-notifications-go/config.json` — that path is hardcoded in
 the upstream code and was deliberately left alone in the fork, so an existing config is picked up
-as is. That file wins over the plugin's own `config/config.json`.
+as is. That file wins over the plugin's own `config/config.json`. The plugin's caches and pointers
+did move into their own namespace (`~/.cache/jadlis-notifications/`,
+`~/.claude/jadlis-notifications/`), so an upstream install side by side gets in nobody's way.
 
 ## Background-task gate
 
