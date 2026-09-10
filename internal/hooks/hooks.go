@@ -601,7 +601,9 @@ func (h *Handler) sendNotifications(status analyzer.Status, body, actions, sessi
 	gitBranch := platform.GetGitBranch(cwd)
 	folderName := filepath.Base(cwd)
 
-	joined := joinMessageParts(body, actions)
+	// Local patch: keep only the summary text in the notification body —
+	// drop the action-summary suffix ("📝 1 new  ▶ 2 cmds  ⏱ 41s").
+	joined := body
 
 	// Format: "[sessionname|branch folder] message" or "[sessionname folder] message"
 	var enhancedMessage string
