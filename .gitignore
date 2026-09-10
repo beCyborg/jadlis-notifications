@@ -33,8 +33,9 @@ bin/terminal-notifier.app/
 # macOS ClaudeNotifications.app (created by install.sh for notification icon)
 bin/ClaudeNotifications.app/
 
-# macOS ClaudeNotifier (built from swift-notifier/ or downloaded by install.sh)
-bin/ClaudeNotifier.app/
+# macOS ClaudeNotifier: bin/ClaudeNotifier.app/ is COMMITTED in this fork (notarized upstream
+# helper, redistributed unchanged) so a fresh plugin install shows the Claude icon without
+# running /jadlis-notifications:init. Only the swift-notifier build output stays ignored.
 swift-notifier/.build/
 swift-notifier/ClaudeNotifier.app/
 

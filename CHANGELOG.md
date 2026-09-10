@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.41.1-jadlis — 2026-09-10
+
+### Fixed
+- **Session title for natively named sessions** — the subtitle now falls back to the transcript
+  (`<session>.jsonl`): last `custom-title` entry, else last `ai-title` entry. Claude Code's native
+  background namer (2.1.26x+) writes only `ai-title` lines and never `custom-title.json`, so such
+  sessions showed `branch · folder` instead of their name. `custom-title.json` still wins.
+- **Claude icon after a fresh install** — `bin/ClaudeNotifier.app` (the notarized upstream helper,
+  redistributed unchanged) is committed, so the icon and click-to-focus work right after
+  `claude plugin install` without `/jadlis-notifications:init`. Without it the Go binary silently
+  fell back to Homebrew's `terminal-notifier` and its icon.
+
+### Changed
+- Debug log line for a sent desktop notification now includes the subtitle.
+
 ## 1.41.0-jadlis — 2026-09-10
 
 Fork of [claude-notifications-go](https://github.com/777genius/claude-notifications-go) v1.41.0 as
