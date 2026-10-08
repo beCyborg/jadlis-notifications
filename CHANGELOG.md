@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.41.3-jadlis — 2026-10-08 — бинарь совпадает с версией плагина / binary matches the plugin version
+
+### Для человека
+
+- Уведомления больше не пытаются скачать новый бинарь с GitHub при каждом событии. В 1.41.2 версия плагина выросла, а бинарь остался 1.41.1. Обёртка хука видела разницу и шла за обновлением на заблокированный GitHub.
+- Если у тебя стоит 1.41.2 — обновись до 1.41.3.
+
+### For agents
+
+- Fixed: `cmd/claude-notifications/main.go` `version` 1.41.1 → 1.41.3 and `bin/claude-notifications-darwin-arm64` rebuilt (`GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -trimpath`). `bin/hook-wrapper.sh` compares `claude-notifications version` with `plugin.json` and runs `install.sh --force` on mismatch; `install.sh` still downloads from GitHub Releases (404 since the suspension), so 1.41.2 retried a download on every hook call.
+- Changed: version 1.41.2 → 1.41.3 in `plugin.json` and both fields of `marketplace.json`.
+- Rule: every version bump must also bump `main.go` `version` and rebuild the committed darwin/arm64 binary until releases move to GitLab.
+- Known: `TestDetectMultiplexerArgs_TmuxPriority` fails before and after this change (environment-dependent; not touched).
+
 ## 1.41.2-jadlis — 2026-10-08 — репозиторий переехал на GitLab / repository moved to GitLab
 
 ### Для человека
