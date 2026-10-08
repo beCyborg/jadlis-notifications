@@ -6,7 +6,7 @@
 В подзаголовке — имя сессии, так что из десяти вкладок видно, какая именно освободилась.
 
 ```
-claude plugin marketplace add https://github.com/beCyborg/jadlis-hub
+claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 claude plugin install jadlis-notifications@jadlis
 ```
 
@@ -72,7 +72,7 @@ GPL-3.0, выложенный как моё рабочее место, а не �
 Ты — установщик. Поставь на этот Mac плагин jadlis-notifications из маркетплейса jadlis.
 Ключей этому плагину не нужно, ничего секретного спрашивать не надо.
 Выполни ровно эти команды, дословно, ничего не сокращая:
-1. claude plugin marketplace add https://github.com/beCyborg/jadlis-hub
+1. claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 2. claude plugin install jadlis-notifications@jadlis
 3. claude plugin list — покажи мне строку про jadlis-notifications и его версию.
 Потом скажи мне одной строкой: перезапусти Claude Code, чтобы хуки подхватились.
@@ -84,7 +84,7 @@ GPL-3.0, выложенный как моё рабочее место, а не �
 **б) Команды руками.**
 
 ```
-claude plugin marketplace add https://github.com/beCyborg/jadlis-hub
+claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 claude plugin install jadlis-notifications@jadlis
 claude plugin list
 ```

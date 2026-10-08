@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.41.2-jadlis — 2026-10-08 — репозиторий переехал на GitLab / repository moved to GitLab
+
+### Для человека
+
+- Плагин теперь живёт на GitLab: https://gitlab.com/beCyborg/jadlis-notifications. Аккаунт GitHub beCyborg заблокирован, поэтому старые ссылки открывают 404.
+- Каталог ставится новой командой: `claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git`. Если ты уже ставил его со старой ссылки GitHub, удали каталог командой `claude plugin marketplace remove jadlis` и поставь всё заново по README.
+- Работа плагина не изменилась.
+
+### For agents
+
+- Changed: `github.com/beCyborg/*` links in the README pair, `CONTRIBUTING.md`, `setup.sh`, `commands/init.md` (installer raw URL) and `scripts/linux-focus-debug.sh` (`RAW_URL`) now point to `gitlab.com/beCyborg/*`; `marketplace add` uses the full `https://…/jadlis-hub.git` URL (non-GitHub hosts have no `owner/repo` shorthand).
+- Changed: `.claude-plugin/plugin.json` `homepage`/`repository` and `.claude-plugin/marketplace.json` `repository` → GitLab; version 1.41.1 → 1.41.2 in both.
+- Changed: CI moved from `.github/workflows/ci.yml` (reusable workflow in `beCyborg/jadlis-hub`, `mode: plugin`, `forbid-mermaid: false`) to `.gitlab-ci.yml` including `/ci/plugin-ci.yml` from `beCyborg/jadlis-hub` on GitLab.
+- Not changed: the Go module path `github.com/beCyborg/jadlis-notifications` and the release-download machinery (`bin/install.sh`, `bin/bootstrap.sh`, `tools/sync-upstream.sh`, `scripts/dev-real-plugin.sh`, installer tests) still target GitHub Releases. The committed `darwin/arm64` binary and `ClaudeNotifier.app` work without a download.
+
 ## 1.41.1-jadlis — 2026-09-10
 
 ### Fixed

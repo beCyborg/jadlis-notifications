@@ -29,13 +29,13 @@ fi
 echo "Plugin root: $PLUGIN_ROOT"
 echo ""
 
-# Always download the latest install.sh from GitHub to ensure we have newest version
-INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/beCyborg/jadlis-notifications/main/bin/install.sh"
+# Always download the latest install.sh from GitLab to ensure we have newest version
+INSTALL_SCRIPT_URL="https://gitlab.com/beCyborg/jadlis-notifications/-/raw/main/bin/install.sh"
 # Use portable temp directory (works on macOS, Linux, Windows Git Bash)
 TEMP_DIR="${TMPDIR:-${TEMP:-/tmp}}"
 TEMP_INSTALL_SCRIPT="${TEMP_DIR}/claude-notifications-install-$$.sh"
 
-echo "📥 Fetching latest installer from GitHub..."
+echo "📥 Fetching latest installer from GitLab..."
 if curl -fsSL "$INSTALL_SCRIPT_URL" -o "$TEMP_INSTALL_SCRIPT" 2>/dev/null; then
   chmod +x "$TEMP_INSTALL_SCRIPT"
   echo "✓ Latest installer downloaded"

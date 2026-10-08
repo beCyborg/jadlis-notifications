@@ -4,7 +4,7 @@
 set -uo pipefail
 
 REPO="beCyborg/jadlis-notifications"
-RAW_URL="https://raw.githubusercontent.com/${REPO}/main/scripts/linux-focus-debug.sh"
+RAW_URL="https://gitlab.com/beCyborg/jadlis-notifications/-/raw/main/scripts/linux-focus-debug.sh"
 MARKETPLACE_NAME="claude-notifications-go"
 PLUGIN_NAME="claude-notifications-go"
 PLUGIN_KEY="${PLUGIN_NAME}@${MARKETPLACE_NAME}"

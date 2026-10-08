@@ -6,7 +6,7 @@ A macOS notification arrives when the session has finished a task, asked a quest
 a plan. The subtitle is the session name, so across ten tabs you can tell which one freed up.
 
 ```
-claude plugin marketplace add https://github.com/beCyborg/jadlis-hub
+claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 claude plugin install jadlis-notifications@jadlis
 ```
 
@@ -73,7 +73,7 @@ it from this repository's `v<version>` release and checks the sha256 — it neve
 You are an installer. Install the jadlis-notifications plugin from the jadlis marketplace
 on this Mac. This plugin needs no keys, so do not ask me for anything secret.
 Run exactly these commands, verbatim, without shortening anything:
-1. claude plugin marketplace add https://github.com/beCyborg/jadlis-hub
+1. claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 2. claude plugin install jadlis-notifications@jadlis
 3. claude plugin list — show me the jadlis-notifications line and its version.
 Then tell me in one line: restart Claude Code so the hooks are picked up.
@@ -85,7 +85,7 @@ If a command errors out, stop, show the output, and do not move to the next one.
 **b) Commands by hand.**
 
 ```
-claude plugin marketplace add https://github.com/beCyborg/jadlis-hub
+claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 claude plugin install jadlis-notifications@jadlis
 claude plugin list
 ```
