@@ -10,7 +10,7 @@ claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 claude plugin install jadlis-notifications@jadlis
 ```
 
-Отдельно ставить обычно не нужно: плагин приезжает зависимостью `jadlis-claudecode`.
+Ставится отдельной командой: с версии 2.0.0 `jadlis-claudecode` больше не тянет его зависимостью, а предлагает поставить на шаге «Уведомления».
 Ключей и подписок не нужно, патченый бинарь `darwin/arm64` лежит прямо в репозитории.
 
 ![Одинаковые вкладки, уведомление с именем сессии, клик поднимает нужную](docs/img/hero-jadlis-notifications.webp)

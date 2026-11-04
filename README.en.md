@@ -10,7 +10,7 @@ claude plugin marketplace add https://gitlab.com/beCyborg/jadlis-hub.git
 claude plugin install jadlis-notifications@jadlis
 ```
 
-Installing it separately is usually unnecessary: it arrives as a dependency of `jadlis-claudecode`.
+Install it with its own command: since 2.0.0 `jadlis-claudecode` no longer pulls it in as a dependency and offers it at the «Notifications» step instead.
 No keys and no subscriptions; the patched `darwin/arm64` binary is committed to the repository.
 
 ![Identical tabs, a notification carrying the session name, a click raising the right one](docs/img/hero-jadlis-notifications.webp)
