@@ -13,7 +13,7 @@ Thank you for your interest in contributing to Claude Notifications!
 ### 1. Clone and build
 
 ```bash
-git clone https://gitlab.com/beCyborg/jadlis-notifications
+git clone https://github.com/beCyborg/jadlis-notifications
 cd claude-notifications-go
 make build
 ```
@@ -170,4 +170,4 @@ See **[Release Checklist](docs/RELEASE.md)** for the full step-by-step guide.
 
 ## Reporting Issues
 
-Found a bug or have a feature request? [Open an issue](https://gitlab.com/beCyborg/jadlis-notifications/-/issues).
+Found a bug or have a feature request? [Open an issue](https://github.com/beCyborg/jadlis-notifications/issues).

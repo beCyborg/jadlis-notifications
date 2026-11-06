@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.41.4-jadlis — 2026-11-06 — репозиторий снова на GitHub / repository back on GitHub
+
+### Для человека
+
+- Плагин снова живёт на GitHub: https://github.com/beCyborg/jadlis-notifications. Каталог ставится командой `claude plugin marketplace add https://github.com/beCyborg/jadlis-hub.git`.
+- Команда `/jadlis-notifications:init` берёт установщик с GitHub, а не с GitLab. Бинарь и утилиты по-прежнему качаются из релизов GitHub.
+
+### For agents
+
+- Changed: `commands/init.md`, `setup.sh`, `scripts/linux-focus-debug.sh`, `CONTRIBUTING.md`, README pair, `plugin.json`/`marketplace.json` URLs — GitLab → `github.com/beCyborg/jadlis-notifications` (raw files via `raw.githubusercontent.com`).
+- Changed: CI `.gitlab-ci.yml` → `.github/workflows/ci.yml` (reusable `beCyborg/jadlis-hub` plugin-ci).
+- Changed: version 1.41.3 → 1.41.4 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt. GitHub Release `v1.41.4` carries the six darwin/arm64 assets `install.sh` expects.
+- Rule: every version bump also bumps `main.go` `version`, rebuilds the committed binary and publishes a `v<version>` GitHub Release with the six assets.
+
 ## 1.41.3-jadlis — 2026-10-08 — бинарь совпадает с версией плагина / binary matches the plugin version
 
 ### Для человека
