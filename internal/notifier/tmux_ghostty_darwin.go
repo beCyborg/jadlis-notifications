@@ -34,8 +34,9 @@ var ghosttyNewTabRunner = runGhosttyNewTab
 var errGhosttyTTYNotFound = errors.New("no Ghostty terminal with these ttys")
 
 // FocusGhosttyTmuxPane raises the Ghostty tab whose tmux client shows target's
-// pane. When no Ghostty tab shows the session, it opens a new Ghostty tab
-// attached to that session. On any other failure it still activates Ghostty,
+// pane. When the owner's tld window is open, the session is shown there and the
+// window's tab is raised instead. When no Ghostty tab shows the session, it
+// opens a new Ghostty tab attached to that session. On any other failure it still activates Ghostty,
 // so the click is never a no-op, and returns the reason.
 func FocusGhosttyTmuxPane(target GhosttyTmuxTarget) error {
 	openTab := func(session string) error {
@@ -61,6 +62,20 @@ func focusGhosttyTmuxPane(
 	// when it comes to the front. Failure here is not fatal.
 	if err := selectTmuxPaneInOwnSession(run, pane); err != nil {
 		logging.Debug("focus-tmux-ghostty: select %s in %s failed: %v", pane, session, err)
+	}
+
+	// An open tld window is the owner's cockpit: show the session there and
+	// raise the tab that hosts the window, instead of a tab per session.
+	if tty, ok := tldSessionOpener(session); ok {
+		if _, err := focusTTY([]string{tty}); err != nil {
+			// The window shows the session, but its terminal is not a Ghostty
+			// tab we can raise: bring Ghostty forward, open nothing new.
+			logging.Debug("focus-tmux-ghostty: tld window shows %q on %s, tab not raised: %v", session, tty, err)
+			_ = activate()
+			return nil
+		}
+		logging.Debug("focus-tmux-ghostty: pane %s session %q -> tld window on %s", pane, session, tty)
+		return nil
 	}
 
 	if len(ttys) > 0 {

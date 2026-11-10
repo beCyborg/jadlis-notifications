@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.43.2-jadlis — 2026-11-10 — клик показывает сессию в окне tld / click shows the session in the tld window
+
+### Для человека
+
+- Если окно сессий `tld` открыто, клик по уведомлению показывает сессию в этом окне и поднимает вкладку Ghostty, где окно живёт. Новая вкладка на каждую сессию больше не открывается.
+- Если окно `tld` закрыто, клик работает как в 1.43.1: своя вкладка сессии или новая вкладка.
+- Если окно показало сессию, но его вкладку поднять не удалось, плагин просто выводит Ghostty вперёд и новых вкладок не открывает.
+
+### For agents
+
+- Added: `internal/notifier/tld_window_darwin.go` — `tldSessionOpener` (default `runTldOpen`) runs `~/.claude/scripts/tld.py open <session>` (override `JADLIS_TLD_SCRIPT`) with a 3 s timeout and `WaitDelay` 500 ms; adds `TMPDIR` from `getconf DARWIN_USER_TEMP_DIR` when the env lacks it; accepts only stdout starting with `/dev/`. Contract: exit 0 + tty line = window open; exit 1 = no window; exit 2 = unknown session.
+- Changed: `focusGhosttyTmuxPane` asks the tld opener after `select-window`/`select-pane` and before the client-tty path. Success → raise the returned tty via the Ghostty AppleScript; tab not found → only `activate`, no new tab. No window → old 1.43.1 path unchanged.
+- Tests: `tld_window_darwin_test.go` — `init()` stubs the opener to "no window" for every test (no test reaches the owner's window); `TestFocusGhosttyTmuxPane_TldWindowComesFirst`, `_TldWindowForSessionWithoutClients`, `_TldWindowTabNotRaisedActivatesGhostty`, `_NoTldWindowKeepsOldPath`, `TestRunTldOpen`.
+- Changed: version 1.43.1 → 1.43.2 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt. Beta: pinned only in the owner's personal catalog; public hub stays on 1.41.4.
+
 ## 1.43.1-jadlis — 2026-11-10 — уведомление «Задача выполнена» больше не теряется / Stop no longer dropped before the transcript flush
 
 ### Для человека
