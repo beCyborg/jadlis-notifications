@@ -19,7 +19,7 @@ import (
 	"github.com/beCyborg/jadlis-notifications/internal/winfocus"
 )
 
-const version = "1.41.4"
+const version = "1.42.1"
 const windowsLazyUpdateRetryAfter = time.Hour
 
 var (
@@ -68,6 +68,8 @@ func main() {
 		}
 	case "focus-windows":
 		runFocusWindows(os.Args[2:])
+	case "focus-tmux-ghostty":
+		runFocusTmuxGhostty(os.Args[2:])
 	case "play-sound":
 		runPlaySound(os.Args[2:])
 	case "daemon", "--daemon":
@@ -518,6 +520,49 @@ func runFocusWindows(args []string) {
 		os.Exit(1)
 	}
 	logging.Debug("focus-windows: raised window for %+v", ctx)
+}
+
+// runFocusTmuxGhostty is the notification click handler for Ghostty + tmux.
+func runFocusTmuxGhostty(args []string) {
+	target, err := parseFocusTmuxGhosttyArgs(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "focus-tmux-ghostty: %v\n", err)
+		os.Exit(1)
+	}
+	_, _ = logging.InitLogger(getPluginRoot())
+	if err := notifier.FocusGhosttyTmuxPane(target); err != nil {
+		logging.Warn("focus-tmux-ghostty: %v", err)
+		_ = logging.Close()
+		fmt.Fprintf(os.Stderr, "focus-tmux-ghostty: %v\n", err)
+		os.Exit(1)
+	}
+	_ = logging.Close()
+}
+
+func parseFocusTmuxGhosttyArgs(args []string) (notifier.GhosttyTmuxTarget, error) {
+	var target notifier.GhosttyTmuxTarget
+	for i := 0; i < len(args); i++ {
+		flag := args[i]
+		if flag != "--pane" && flag != "--tmux-path" && flag != "--socket" {
+			return target, fmt.Errorf("unknown option: %s", flag)
+		}
+		if i+1 >= len(args) {
+			return target, fmt.Errorf("%s requires a value", flag)
+		}
+		i++
+		switch flag {
+		case "--pane":
+			target.Pane = args[i]
+		case "--tmux-path":
+			target.TmuxPath = args[i]
+		case "--socket":
+			target.Socket = args[i]
+		}
+	}
+	if !strings.HasPrefix(target.Pane, "%") {
+		return target, fmt.Errorf("--pane must be a tmux pane id like %%42, got %q", target.Pane)
+	}
+	return target, nil
 }
 
 func parseFocusWindowOptions(args []string) (notifier.FocusWindowOptions, error) {

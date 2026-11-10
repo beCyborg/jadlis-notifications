@@ -224,3 +224,24 @@ func withIsolatedLazyUpdateGlobals(t *testing.T) {
 		scheduleWindowsLazyUpdate = oldSchedule
 	})
 }
+
+func TestParseFocusTmuxGhosttyArgs(t *testing.T) {
+	target, err := parseFocusTmuxGhosttyArgs([]string{"--pane", "%12", "--tmux-path", "/opt/homebrew/bin/tmux", "--socket", "/private/tmp/tmux-501/default"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if target.Pane != "%12" || target.TmuxPath != "/opt/homebrew/bin/tmux" || target.Socket != "/private/tmp/tmux-501/default" {
+		t.Errorf("target = %+v", target)
+	}
+
+	for _, bad := range [][]string{
+		{},
+		{"--pane"},
+		{"--pane", "main:1"},
+		{"--pane", "%1", "--bogus", "x"},
+	} {
+		if _, err := parseFocusTmuxGhosttyArgs(bad); err == nil {
+			t.Errorf("expected error for %v", bad)
+		}
+	}
+}

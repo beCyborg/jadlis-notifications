@@ -50,6 +50,17 @@ func buildTmuxClickArgs(title, message, bundleID string) ([]string, error) {
 		return nil, err
 	}
 
+	// Ghostty + plain tmux: raise the exact Ghostty tab whose tmux client shows
+	// this pane. Never falls through to switch-client.
+	if isGhosttyBundleID(bundleID) {
+		args, err := buildGhosttyTmuxNotifierArgs(title, message, target, bundleID)
+		if err != nil {
+			return nil, fmt.Errorf("Ghostty tmux helper unavailable: %w", err)
+		}
+		logging.Debug("Ghostty + tmux: using focus-tmux-ghostty for tab switching")
+		return args, nil
+	}
+
 	if isIterm2BundleID(bundleID) {
 		args, err := buildIterm2TmuxNotifierArgs(title, message, target, bundleID)
 		if err == nil {

@@ -57,6 +57,7 @@ func TestGhosttyFrontmostTerminalMatchesSession_WorktreeRejectsMismatchedTitle(t
 }
 
 func TestMaybeCaptureGhosttyTerminalID_PersistsMatchedTerminal(t *testing.T) {
+	t.Setenv("TMUX", "")
 	originalRunner := ghosttyFrontmostTerminalInfoRunner
 	t.Cleanup(func() {
 		ghosttyFrontmostTerminalInfoRunner = originalRunner

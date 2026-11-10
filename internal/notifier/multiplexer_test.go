@@ -46,6 +46,7 @@ func TestDetectMultiplexerArgs_NoMux(t *testing.T) {
 }
 
 func TestDetectMultiplexerArgs_TmuxPriority(t *testing.T) {
+	t.Setenv("TMUX_PANE", "") // a developer running tests inside tmux must not leak a real pane id
 	// When both TMUX and ZELLIJ are set, tmux should win (first in registry)
 	oldTmux := os.Getenv("TMUX")
 	oldZellij := os.Getenv("ZELLIJ")

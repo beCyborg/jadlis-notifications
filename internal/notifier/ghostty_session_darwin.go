@@ -39,6 +39,11 @@ func MaybeCaptureGhosttyTerminalID(configOverride, sessionID, cwd string) {
 	if !isGhosttyBundleID(GetTerminalBundleID(configOverride)) {
 		return
 	}
+	// Inside tmux the click resolves the tab through the tmux client tty, and
+	// the frontmost Ghostty terminal need not belong to this tmux pane.
+	if IsTmux() {
+		return
+	}
 
 	info, err := ghosttyFrontmostTerminalInfoRunner()
 	if err != nil {

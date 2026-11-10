@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.42.1-jadlis — 2026-11-10 — клик открывает нужную вкладку Ghostty / click opens the exact Ghostty tab
+
+### Для человека
+
+- Клик по уведомлению открывает Ghostty сразу на вкладке той сессии, которая его прислала. Схема: одна вкладка Ghostty = один клиент tmux в своей сессии.
+- Клик больше не переключает клиентов tmux и не закрывает сессии. Если вкладка не нашлась, просто открывается Ghostty.
+- В первый раз macOS спросит, можно ли ClaudeNotifier управлять Ghostty. Ответь «Разрешить».
+- Чтобы клик шёл в Ghostty, в `~/.claude/claude-notifications-go/config.json` поле `notifications.desktop.terminalBundleId` должно быть `com.mitchellh.ghostty`.
+
+### For agents
+
+- Added: Ghostty + plain tmux click path. `multiplexer.go: buildTmuxClickArgs` → `buildGhosttyTmuxNotifierArgs` (`tmux_ghostty.go`) when the bundle ID is Ghostty; `-execute` runs `claude-notifications focus-tmux-ghostty --pane %N --tmux-path P [--socket S]`, no `-activate`, never `switch-client`.
+- Added: `focus-tmux-ghostty` (`tmux_ghostty_darwin.go`), resolved at click time: `display-message #{session_name}` → `list-clients -t =<session> -F '#{client_tty} #{client_termname}'` (xterm-ghostty first) → `select-window`/`select-pane` inside that session → Ghostty AppleScript: terminal with that `tty` → `focus` + `activate`. Any failure → `open -b com.mitchellh.ghostty`. Logs to `notification-debug.log`.
+- Gotcha: tmux prints control characters in `-F` output as `_`; a tab separator gave `/dev/ttys018_xterm-ghostty`. Fields are space-separated.
+- Changed: `MaybeCaptureGhosttyTerminalID` returns early inside tmux (no osascript on every PreToolUse; the frontmost Ghostty terminal need not be this pane).
+- Fixed: `TestDetectMultiplexerArgs_TmuxPriority` and `TestMaybeCaptureGhosttyTerminalID_PersistsMatchedTerminal` no longer read the developer's `TMUX`/`TMUX_PANE`; `go test ./...` passes inside tmux.
+- Tests: `tmux_ghostty_test.go` (arg building, tty ordering/dedup, no client-changing commands, e2e on an isolated tmux server with two real pty clients), `tmux_ghostty_darwin_test.go`, `TestParseFocusTmuxGhosttyArgs`.
+- Changed: version 1.41.4 → 1.42.1 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt. 1.42.0 skipped: the fork's GitHub already holds tag `v1.42.0` on an upstream commit, and `install.sh` downloads from `v<plugin.json version>`.
+
 ## 1.41.4-jadlis — 2026-11-06 — репозиторий снова на GitHub / repository back on GitHub
 
 ### Для человека
