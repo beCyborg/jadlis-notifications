@@ -1,6 +1,7 @@
 package notifier
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -194,6 +195,25 @@ func TestResolveTmuxPaneClientTTYs_Errors(t *testing.T) {
 				t.Fatal("expected error")
 			}
 		})
+	}
+}
+
+func TestResolveTmuxPaneClientTTYs_NoClientKeepsSession(t *testing.T) {
+	f := &fakeTmux{answers: map[string]string{"display-message": "s1\n", "list-clients": ""}}
+	session, _, err := resolveTmuxPaneClientTTYs(f.run, "%1")
+	if !errors.Is(err, errNoTmuxClient) || session != "s1" {
+		t.Fatalf("session=%q err=%v, want s1 + errNoTmuxClient", session, err)
+	}
+}
+
+func TestGhosttyTmuxAttachCommand(t *testing.T) {
+	got := ghosttyTmuxAttachCommand(GhosttyTmuxTarget{TmuxPath: "/opt/homebrew/bin/tmux", Socket: "/private/tmp/tmux-501/default"}, "jadlis_J-NT_13")
+	want := "'/opt/homebrew/bin/tmux' -S '/private/tmp/tmux-501/default' attach-session -t '=jadlis_J-NT_13'"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+	if got := ghosttyTmuxAttachCommand(GhosttyTmuxTarget{TmuxPath: "/t"}, "it's"); got != `'/t' attach-session -t '=it'\''s'` {
+		t.Errorf("session name not shell-quoted: %q", got)
 	}
 }
 

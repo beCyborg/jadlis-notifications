@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.43.0-jadlis — 2026-11-10 — сессия без вкладки открывается в новой вкладке / a session without a tab opens in a new tab
+
+### Для человека
+
+- Если сессия tmux не открыта ни в одной вкладке Ghostty, клик по её уведомлению открывает новую вкладку и подключает её к этой сессии. Следующий клик найдёт эту вкладку и новую не откроет.
+- Фоновые копии Claude (`/fork`, `claude agents`) работают без tmux, для них поведение прежнее.
+
+### For agents
+
+- Added: `focus-tmux-ghostty` opens a new Ghostty tab running `tmux [-S socket] attach-session -t =<session>` when the pane's session has no client (`errNoTmuxClient`) or Ghostty has no tab on any client tty (`errGhosttyTTYNotFound`). AppleScript `new tab in front window with configuration` (new window when none), `select tab`, `activate window`, `activate`.
+- Safety: a failed Ghostty lookup (timeout, permission) only activates Ghostty — no duplicate tab. Still no `switch-client`/`detach-client`/`kill-*`.
+- Tests: `TestFocusGhosttyTmuxPane_OpensTabWhenSessionHasNoClient`, `_OpensTabWhenNoGhosttyTabShowsSession`, `_NoDuplicateTabOnAppleScriptFailure`, `TestGhosttyTmuxAttachCommand`, `TestResolveTmuxPaneClientTTYs_NoClientKeepsSession`.
+- Ops note (owner machine, 2026-11-10): sessions opened before an update keep calling hooks from the old cache dir; the 1.41.4 dir was replaced by a symlink to 1.42.1 so they run new code.
+- Changed: version 1.42.1 → 1.43.0 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt.
+
 ## 1.42.1-jadlis — 2026-11-10 — клик открывает нужную вкладку Ghostty / click opens the exact Ghostty tab
 
 ### Для человека

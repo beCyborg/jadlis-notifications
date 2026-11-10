@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -61,6 +62,24 @@ func buildGhosttyTmuxNotifierArgs(title, message, paneTarget, bundleID string) (
 		"-execute", cmd,
 		"-group", fmt.Sprintf("claude-notif-%d", time.Now().UnixNano()),
 	}, nil
+}
+
+// errNoTmuxClient means the pane's session exists but no client shows it, so
+// no terminal tab can be raised; the click opens a new tab attached to it.
+var errNoTmuxClient = errors.New("no tmux client attached")
+
+// ghosttyTmuxAttachCommand is the command a new Ghostty tab runs to attach to
+// session on target's tmux server. "=" matches the session name exactly.
+func ghosttyTmuxAttachCommand(target GhosttyTmuxTarget, session string) string {
+	tmuxPath := target.TmuxPath
+	if tmuxPath == "" {
+		tmuxPath = getTmuxPath()
+	}
+	cmd := shellQuote(tmuxPath)
+	if target.Socket != "" {
+		cmd += " -S " + shellQuote(target.Socket)
+	}
+	return cmd + " attach-session -t " + shellQuote("="+session)
 }
 
 // GhosttyTmuxTarget identifies a tmux pane on a given tmux server.
@@ -144,7 +163,7 @@ func resolveTmuxPaneClientTTYs(run tmuxCommandRunner, pane string) (string, []st
 	}
 	ttys := append(ghostty, others...)
 	if len(ttys) == 0 {
-		return session, nil, fmt.Errorf("no tmux client attached to session %q", session)
+		return session, nil, fmt.Errorf("%w to session %q", errNoTmuxClient, session)
 	}
 	return session, ttys, nil
 }
