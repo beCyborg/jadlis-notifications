@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.43.1-jadlis — 2026-11-10 — уведомление «Задача выполнена» больше не теряется / Stop no longer dropped before the transcript flush
+
+### Для человека
+
+- Иногда уведомление «✅ Задача выполнена» не приходило: чаще всего после короткого ответа без инструментов. Плагин читал журнал сессии раньше, чем Claude дописывал туда ответ. Теперь плагин берёт ответ прямо из данных хука.
+
+### For agents
+
+- Fixed: `HookData.LastAssistantMessage` (`last_assistant_message`, sent by Claude Code to Stop/SubagentStop). When transcript analysis returns `unknown` (Stop fired before the async transcript write) and `notifyOnTextResponse` is on, `fallbackStopFromHookMessage` reports `task_complete` with that text as the summary. Analyzed statuses always win. Core of upstream 1.45.16 (`36206130`); its Codex/Linux DND/content-key parts are not ported.
+- Seen live 2026-11-10 11:05: first text-only reply, `Analyzed status: unknown`, notification skipped; replay 90 s later → task_complete.
+- Tests: `TestHandler_Stop_UnflushedTranscriptUsesLastAssistantMessage`, `_UnflushedWithoutHookMessageStaysSilent`, `_FallbackRespectsNotifyOnTextResponseOff`, `_AnalyzedStatusWinsOverHookMessage`.
+- Changed: version 1.43.0 → 1.43.1 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt. Beta: pinned only in the owner's personal catalog; public hub stays on 1.41.4.
+
 ## 1.43.0-jadlis — 2026-11-10 — сессия без вкладки открывается в новой вкладке / a session without a tab opens in a new tab
 
 ### Для человека

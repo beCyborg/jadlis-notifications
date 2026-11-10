@@ -50,10 +50,13 @@ func (d notificationDelivery) delivered() bool {
 // HookData represents the data received from Claude Code hooks
 type HookData struct {
 	TranscriptPath string `json:"transcript_path"`
-	SessionID      string `json:"session_id"`
-	CWD            string `json:"cwd"`
-	ToolName       string `json:"tool_name,omitempty"`
-	HookEventName  string `json:"hook_event_name,omitempty"`
+	// LastAssistantMessage is the final response text Claude Code passes to
+	// Stop and SubagentStop hooks; the transcript may not contain it yet.
+	LastAssistantMessage string `json:"last_assistant_message,omitempty"`
+	SessionID            string `json:"session_id"`
+	CWD                  string `json:"cwd"`
+	ToolName             string `json:"tool_name,omitempty"`
+	HookEventName        string `json:"hook_event_name,omitempty"`
 	// Team-related fields (present in TeammateIdle, TaskCreated, TaskCompleted hooks)
 	TeamName     string `json:"team_name,omitempty"`
 	TeammateName string `json:"teammate_name,omitempty"`
@@ -257,6 +260,7 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 		if err != nil {
 			return err
 		}
+		status, parsedMessages = h.fallbackStopFromHookMessage(status, parsedMessages, hookData.LastAssistantMessage)
 		// Note: We don't delete session state here to preserve cooldown info
 		// State files have TTL and will be cleaned up automatically
 		defer h.cleanupOldLocks()
@@ -285,6 +289,7 @@ func (h *Handler) HandleHook(hookEvent string, input io.Reader) error {
 		if err != nil {
 			return err
 		}
+		status, parsedMessages = h.fallbackStopFromHookMessage(status, parsedMessages, hookData.LastAssistantMessage)
 		defer h.cleanupOldLocks()
 	case "TeammateIdle":
 		return h.handleTeammateIdle(&hookData)
@@ -556,6 +561,26 @@ func (h *Handler) handleStopEvent(hookData *HookData) (analyzer.Status, []jsonl.
 
 	logging.Debug("Analyzed status: %s", status)
 	return status, messages, nil
+}
+
+// fallbackStopFromHookMessage handles a Stop that fires before Claude Code has
+// flushed the final answer to the transcript (the transcript is written
+// asynchronously). Transcript analysis then finds no assistant message and
+// returns unknown, which used to drop the notification. The hook payload
+// carries the final text, so a text-only turn is reported as task_complete
+// with that text as the summary — the same result the transcript would give
+// once flushed. Ported from upstream 1.45.16.
+func (h *Handler) fallbackStopFromHookMessage(status analyzer.Status, messages []jsonl.Message, lastMessage string) (analyzer.Status, []jsonl.Message) {
+	if status != analyzer.StatusUnknown || !h.cfg.ShouldNotifyOnTextResponse() || strings.TrimSpace(lastMessage) == "" {
+		return status, messages
+	}
+	logging.Debug("Stop: transcript not flushed yet, using last_assistant_message from the hook payload")
+	return analyzer.StatusTaskComplete, []jsonl.Message{{
+		Type: "assistant",
+		Message: jsonl.MessageContent{Role: "assistant", Content: []jsonl.Content{{
+			Type: "text", Text: lastMessage,
+		}}},
+	}}
 }
 
 // generateMessage generates a notification body and action summary.

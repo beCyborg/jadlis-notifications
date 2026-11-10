@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -2393,4 +2394,110 @@ func TestHandler_Stop_NonTeamLead_NormalBehavior(t *testing.T) {
 func setupTeamStateManager(t *testing.T, homeDir string) *teamstate.Manager {
 	t.Helper()
 	return teamstate.NewManager(filepath.Join(homeDir, ".claude"))
+}
+
+// unflushedTranscript is a transcript as it looks when Stop fires before the
+// final answer is written: the user's request is there, the answer is not.
+func unflushedTranscript(t *testing.T) string {
+	return createTempTranscript(t, []jsonl.Message{{
+		Type: "user",
+		Message: jsonl.MessageContent{Role: "user", Content: []jsonl.Content{
+			{Type: "text", Text: "Ответь одной фразой"},
+		}},
+		Timestamp: "2026-11-10T10:05:20Z",
+	}})
+}
+
+func TestHandler_Stop_UnflushedTranscriptUsesLastAssistantMessage(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{Desktop: config.DesktopConfig{Enabled: true}},
+		Statuses:      map[string]config.StatusInfo{"task_complete": {Title: "Task Complete"}},
+	}
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	err := handler.HandleHook("Stop", buildHookDataJSON(HookData{
+		SessionID:            "unflushed-1-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		TranscriptPath:       unflushedTranscript(t),
+		CWD:                  "/test",
+		LastAssistantMessage: "Тестовая сессия E готова.",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !mockNotif.wasCalled() {
+		t.Fatal("a Stop that fires before the transcript flush must still notify")
+	}
+	call := mockNotif.lastCall()
+	if call.status != analyzer.StatusTaskComplete {
+		t.Errorf("status = %v, want task_complete", call.status)
+	}
+	if !strings.Contains(call.message, "Тестовая сессия E готова") {
+		t.Errorf("message %q should come from last_assistant_message", call.message)
+	}
+}
+
+func TestHandler_Stop_UnflushedWithoutHookMessageStaysSilent(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{Desktop: config.DesktopConfig{Enabled: true}},
+		Statuses:      map[string]config.StatusInfo{"task_complete": {Title: "Task Complete"}},
+	}
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	if err := handler.HandleHook("Stop", buildHookDataJSON(HookData{
+		SessionID:      "unflushed-2-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		TranscriptPath: unflushedTranscript(t),
+		CWD:            "/test",
+	})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mockNotif.wasCalled() {
+		t.Error("without a final message there is nothing to report")
+	}
+}
+
+func TestHandler_Stop_FallbackRespectsNotifyOnTextResponseOff(t *testing.T) {
+	off := false
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{
+			Desktop:              config.DesktopConfig{Enabled: true},
+			NotifyOnTextResponse: &off,
+		},
+		Statuses: map[string]config.StatusInfo{"task_complete": {Title: "Task Complete"}},
+	}
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	if err := handler.HandleHook("Stop", buildHookDataJSON(HookData{
+		SessionID:            "unflushed-3-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		TranscriptPath:       unflushedTranscript(t),
+		CWD:                  "/test",
+		LastAssistantMessage: "Готово.",
+	})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mockNotif.wasCalled() {
+		t.Error("text-only notifications are off, the fallback must not send one")
+	}
+}
+
+func TestHandler_Stop_AnalyzedStatusWinsOverHookMessage(t *testing.T) {
+	cfg := &config.Config{
+		Notifications: config.NotificationsConfig{Desktop: config.DesktopConfig{Enabled: true}},
+		Statuses: map[string]config.StatusInfo{
+			"task_complete":   {Title: "Task Complete"},
+			"review_complete": {Title: "Review Complete"},
+		},
+	}
+	handler, mockNotif, _ := newTestHandler(t, cfg)
+
+	if err := handler.HandleHook("Stop", buildHookDataJSON(HookData{
+		SessionID:            "flushed-1-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		TranscriptPath:       createTempTranscript(t, buildTranscriptWithTools([]string{"Read"}, 300)),
+		CWD:                  "/test",
+		LastAssistantMessage: "Готово.",
+	})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if call := mockNotif.lastCall(); call.status != analyzer.StatusReviewComplete {
+		t.Errorf("status = %v, want review_complete from the transcript", call.status)
+	}
 }
