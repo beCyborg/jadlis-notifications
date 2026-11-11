@@ -14,6 +14,9 @@ import (
 
 const iTerm2SessionIDEnv = "ITERM_SESSION_ID"
 
+// zmxSessionEnv names the zmx session a process runs in (set by zmx).
+const zmxSessionEnv = "ZMX_SESSION"
+
 const (
 	iTerm2HealthcheckFlag           = "--healthcheck"
 	iTerm2HealthcheckExitDisabled   = 11
@@ -44,8 +47,15 @@ const (
 // instead of focus-window to avoid confusing Screen Recording prompts on iTerm2.
 func buildIterm2FocusScript(cwd string) string {
 	sessionID := os.Getenv(iTerm2SessionIDEnv)
+	// A zmx session moves between tabs (its own tab, the right half of the si
+	// window), so a termid inherited at its start may name a tab that no longer
+	// shows it: the click asks an open si window by the session name instead.
+	zmxSession := os.Getenv(zmxSessionEnv)
+	if zmxSession != "" {
+		sessionID = ""
+	}
 	pythonPath, scriptPath, ok := getiTerm2PythonEnv()
-	if ok && (sessionID != "" || isUsableFocusCWD(cwd)) &&
+	if ok && (sessionID != "" || zmxSession != "" || isUsableFocusCWD(cwd)) &&
 		iTerm2PythonAPIHealthcheck(pythonPath, scriptPath) == iTerm2HelperReady {
 		helperCmd := fmt.Sprintf("%s %s",
 			shellQuote(pythonPath),
@@ -53,6 +63,9 @@ func buildIterm2FocusScript(cwd string) string {
 		)
 		if sessionID != "" {
 			helperCmd += " --termid " + shellQuote(sessionID)
+		}
+		if zmxSession != "" {
+			helperCmd += " --session " + shellQuote(zmxSession)
 		}
 		if isUsableFocusCWD(cwd) {
 			helperCmd += " --cwd " + shellQuote(cwd)

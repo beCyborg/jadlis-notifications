@@ -1460,6 +1460,25 @@ func TestBuildFocusScript_Iterm2PrefersExactSessionHelper(t *testing.T) {
 	}
 }
 
+func TestBuildFocusScript_Iterm2ZmxSessionAsksSiByName(t *testing.T) {
+	setupFakeiTerm2Env(t)
+	overrideIterm2Healthcheck(t, iTerm2HelperReady)
+	t.Setenv(iTerm2SessionIDEnv, "w0t0p2:stale-tab")
+	t.Setenv(zmxSessionEnv, "jadlis_J_2")
+
+	script := buildFocusScript("com.googlecode.iterm2", "/home/user/my-project")
+
+	if !strings.Contains(script, "--session 'jadlis_J_2'") {
+		t.Errorf("zmx session should be passed by name, got: %s", script)
+	}
+	if strings.Contains(script, "--termid") {
+		t.Errorf("zmx session must not target the termid it inherited, got: %s", script)
+	}
+	if !strings.Contains(script, "--cwd '/home/user/my-project'") {
+		t.Errorf("cwd fallback should stay, got: %s", script)
+	}
+}
+
 func TestBuildFocusScript_Iterm2WithoutCWDStillTargetsSession(t *testing.T) {
 	setupFakeiTerm2Env(t)
 	overrideIterm2Healthcheck(t, iTerm2HelperReady)

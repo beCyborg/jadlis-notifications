@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.43.3-jadlis — 2026-11-11 — клик в iTerm2 показывает сессию в окне si / iTerm2 click shows the session in the si window
+
+### Для человека
+
+- Если у сессии нет своей вкладки iTerm2, клик по уведомлению показывает её в правой половине окна `si` и выводит это окно вперёд. Раньше клик только поднимал iTerm2.
+- Это работает и для сессий в tmux, и для сессий в zmx.
+- Если у tmux-сессии есть своя вкладка, клик открывает её, как раньше. Если окно `si` закрыто, клик просто поднимает iTerm2.
+
+### For agents
+
+- Changed: `scripts/iterm2-select-tab.py` — new `--session <name>`; `tld_open()` runs `~/.claude/scripts/tld.py open <session>` (override `JADLIS_TLD_SCRIPT`, 3 s timeout, `TMPDIR` from `getconf DARWIN_USER_TEMP_DIR` when missing) and `select_by_tty()` activates the iTerm2 session with the returned tty. `--pane` path: when `select_tab` fails or raises «no tmux client tty found», the session name (from `--session` or `tmux display-message`) goes to tld. termid/cwd path order: termid → tld by `--session` → unique cwd.
+- Changed: `buildIterm2FocusScript` — inside zmx (`ZMX_SESSION`) passes `--session <name>` and drops the inherited `ITERM_SESSION_ID` (it may name a tab that no longer shows the session).
+- Needs tld with zmx support in `tld open` (jadlis-tld, 2026-11-11): the cockpit's viewer detaches its tmux client and attaches the zmx session.
+- Tests: `TestBuildFocusScript_Iterm2ZmxSessionAsksSiByName`; `setupFakeiTerm2Env` clears `ZMX_SESSION`. Live check: helper `--session jadlis_J` with `TMPDIR` unset → tld answered `/dev/ttys013`, rc 0.
+- Changed: version 1.43.2 → 1.43.3 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt.
+
 ## 1.43.2-jadlis — 2026-11-10 — клик показывает сессию в окне tld / click shows the session in the tld window
 
 ### Для человека

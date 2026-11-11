@@ -38,6 +38,8 @@ func overrideHome(t *testing.T, dir string) {
 func setupFakeiTerm2Env(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
+	// Tests may run inside a zmx session; its name must not leak into the script.
+	t.Setenv(zmxSessionEnv, "")
 
 	// Create fake venv with python3 binary
 	venvBin := filepath.Join(tmpDir, ".claude", "claude-notifications-go",
