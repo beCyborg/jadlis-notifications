@@ -1479,6 +1479,19 @@ func TestBuildFocusScript_Iterm2ZmxSessionAsksSiByName(t *testing.T) {
 	}
 }
 
+func TestBuildFocusScript_Iterm2ZmxPassesSocketDir(t *testing.T) {
+	setupFakeiTerm2Env(t)
+	overrideIterm2Healthcheck(t, iTerm2HelperReady)
+	t.Setenv(zmxSessionEnv, "jadlis_J")
+	t.Setenv(zmxDirEnv, "/Users/x/.local/state/zmx/sock")
+
+	script := buildFocusScript("com.googlecode.iterm2", "/home/user/my-project")
+
+	if !strings.HasPrefix(script, "ZMX_DIR='/Users/x/.local/state/zmx/sock' ") {
+		t.Errorf("click helper should get the session's ZMX_DIR, got: %s", script)
+	}
+}
+
 func TestBuildFocusScript_Iterm2WithoutCWDStillTargetsSession(t *testing.T) {
 	setupFakeiTerm2Env(t)
 	overrideIterm2Healthcheck(t, iTerm2HelperReady)

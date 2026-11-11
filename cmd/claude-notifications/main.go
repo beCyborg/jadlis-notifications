@@ -19,7 +19,7 @@ import (
 	"github.com/beCyborg/jadlis-notifications/internal/winfocus"
 )
 
-const version = "1.43.3"
+const version = "1.43.4"
 const windowsLazyUpdateRetryAfter = time.Hour
 
 var (

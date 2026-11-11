@@ -40,6 +40,7 @@ func setupFakeiTerm2Env(t *testing.T) string {
 	tmpDir := t.TempDir()
 	// Tests may run inside a zmx session; its name must not leak into the script.
 	t.Setenv(zmxSessionEnv, "")
+	t.Setenv(zmxDirEnv, "")
 
 	// Create fake venv with python3 binary
 	venvBin := filepath.Join(tmpDir, ".claude", "claude-notifications-go",

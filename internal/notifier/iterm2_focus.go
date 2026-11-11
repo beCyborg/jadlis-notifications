@@ -17,6 +17,9 @@ const iTerm2SessionIDEnv = "ITERM_SESSION_ID"
 // zmxSessionEnv names the zmx session a process runs in (set by zmx).
 const zmxSessionEnv = "ZMX_SESSION"
 
+// zmxDirEnv is zmx's socket dir override.
+const zmxDirEnv = "ZMX_DIR"
+
 const (
 	iTerm2HealthcheckFlag           = "--healthcheck"
 	iTerm2HealthcheckExitDisabled   = 11
@@ -66,7 +69,13 @@ func buildIterm2FocusScript(cwd string) string {
 		}
 		if zmxSession != "" {
 			helperCmd += " --session " + shellQuote(zmxSession)
+			// The click runs outside the session: without the session's socket
+			// dir, zmx (and si) would look in the default one and miss it.
+			if zmxDir := os.Getenv(zmxDirEnv); zmxDir != "" {
+				helperCmd = "ZMX_DIR=" + shellQuote(zmxDir) + " " + helperCmd
+			}
 		}
+		logging.Debug("iTerm2 click helper: %s", helperCmd)
 		if isUsableFocusCWD(cwd) {
 			helperCmd += " --cwd " + shellQuote(cwd)
 		}

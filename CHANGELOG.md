@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.43.4-jadlis — 2026-11-11 — клик по zmx-сессии при своей папке сокетов / zmx click with a custom socket dir
+
+### Для человека
+
+- Клик по уведомлению zmx-сессии находит её и тогда, когда сокеты zmx лежат в своей папке (`ZMX_DIR`), а не в папке по умолчанию.
+- В журнале плагина теперь видна команда клика для iTerm2. По ней можно проверить, куда клик поведёт.
+
+### For agents
+
+- Changed: `buildIterm2FocusScript` — inside zmx, a set `ZMX_DIR` is prefixed to the helper command (`ZMX_DIR='…' python helper …`), so `tld.py open` → `zmx list` at click time sees the session's socket dir.
+- Added: debug log line `iTerm2 click helper: <cmd>`.
+- Tests: `TestBuildFocusScript_Iterm2ZmxPassesSocketDir`; `setupFakeiTerm2Env` clears `ZMX_DIR`.
+- Note: `terminalBundleId` in `~/.claude/claude-notifications-go/config.json` is `com.googlecode.iterm2`, so a zmx session started by a script (no `TERM_PROGRAM`, no `__CFBundleIdentifier` — checked on a scratch zmx session) still takes the iTerm2 path.
+- Changed: version 1.43.3 → 1.43.4; `bin/claude-notifications-darwin-arm64` rebuilt.
+
 ## 1.43.3-jadlis — 2026-11-11 — клик в iTerm2 показывает сессию в окне si / iTerm2 click shows the session in the si window
 
 ### Для человека
