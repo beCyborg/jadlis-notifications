@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Select iTerm2 tab by tmux pane ID for iTerm2 + tmux.
+"""Select the iTerm2 tab of a notification: by tmux pane ID, by zmx session name or by termid.
 
 Usage:
     iterm2-select-tab.py --pane %42 --tmux-path /opt/homebrew/bin/tmux
+    ZMX_DIR=<socket dir> iterm2-select-tab.py --session <zmx session> [--cwd DIR]
     iterm2-select-tab.py --list
 
 Requires:
@@ -199,21 +200,21 @@ async def select_tab(connection, target_pane, tmux_path, socket_path):
 
 
 TLD_OPEN_TIMEOUT = 3
+# `tld open --tab` waits up to 2 s for the new tab's tty on top of the session lookup.
+TLD_TAB_TIMEOUT = 6
+
+ZMX = os.environ.get("JADLIS_ZMX") or "/opt/homebrew/bin/zmx"
+LSOF = "/usr/sbin/lsof"
 
 
-def tld_open(session_name):
-    """Ask an open si/tld window (~/.claude/scripts/tld.py) to show the session on its right.
-
-    Contract of `tld.py open <session>`: rc 0 and one stdout line with the tty of the terminal
-    that shows the window; rc 1 when no window is open; rc 2 when the session is unknown.
-    Returns the tty or ''.
-    """
-    script = os.environ.get("JADLIS_TLD_SCRIPT") or os.path.expanduser("~/.claude/scripts/tld.py")
-    if not session_name or not os.access(script, os.X_OK):
-        return ""
+def helper_env():
+    """Environment for tld/zmx calls: no TMUX, no ZMX_SESSION (with it set, `zmx attach` would
+    switch the client of that session instead of attaching a terminal), TMPDIR present (the si
+    window keeps its state files and zmx its sockets in the per-user temp dir; a click handler
+    may lack it)."""
     env = dict(os.environ, TMUX="")
+    env.pop("ZMX_SESSION", None)
     if not env.get("TMPDIR"):
-        # The window keeps its state files in the per-user temp dir; a click handler may lack it.
         try:
             env["TMPDIR"] = subprocess.run(
                 ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"],
@@ -221,10 +222,107 @@ def tld_open(session_name):
             ).stdout.strip()
         except (OSError, subprocess.SubprocessError):
             pass
+    return env
+
+
+def zmx_client_ttys(session_name):
+    """ttys of the terminals attached to zmx session session_name: its own tab, or the right
+    half of an si window. Returns a set of '/dev/ttysNNN' ('' set when none or unknown).
+
+    `zmx list` gives only a client count. A client process keeps the name it attached with even
+    after `si z1` switched it to another session, so the match goes through the socket: the
+    peer of a client's unix socket is a socket the session daemon accepted (lsof). The daemon
+    is the parent of the process `zmx list` names."""
+    env = helper_env()
+    try:
+        listing = subprocess.run(
+            [ZMX, "list"], capture_output=True, text=True, env=env, timeout=3,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    child = ""
+    for line in listing.splitlines():
+        fields = {}
+        for item in line[line.find("name="):].split("\t") if "name=" in line else ():
+            key, sep, value = item.partition("=")
+            if sep:
+                fields[key] = value
+        if fields.get("name") == session_name:
+            if fields.get("clients", "0") == "0":
+                return set()
+            child = fields.get("pid", "")
+            break
+    if not child.isdigit():
+        return set()
+    try:
+        ps = subprocess.run(
+            ["/bin/ps", "-A", "-o", "pid=,ppid=,tty=,command="],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    daemon = ""
+    clients = {}
+    for line in ps.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            continue
+        pid, ppid, tty, command = parts
+        if pid == child:
+            daemon = ppid
+        argv = command.split()
+        if (tty not in ("??", "-") and os.path.basename(argv[0]) == "zmx"
+                and len(argv) > 1 and argv[1] in ("a", "attach")):
+            clients[pid] = "/dev/" + tty
+    if not daemon or not clients:
+        return set()
+    try:
+        out = subprocess.run(
+            [LSOF, "-a", "-U", "-p", ",".join([daemon] + sorted(clients)), "-F", "pdn"],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    accepted = set()
+    peers = []
+    pid = ""
+    for line in out.splitlines():
+        tag, value = line[:1], line[1:]
+        if tag == "p":
+            pid = value
+        elif tag == "d" and pid == daemon:
+            accepted.add(value)
+        elif tag == "n" and pid in clients and value.startswith("->"):
+            peers.append((pid, value[2:]))
+    return {clients[p] for p, addr in peers if addr in accepted}
+
+
+async def select_zmx_tab(connection, session_name):
+    """Select the tab (or si right half) that already shows zmx session session_name."""
+    for tty in sorted(zmx_client_ttys(session_name)):
+        if await select_by_tty(connection, tty):
+            return True
+    return False
+
+
+def tld_open(session_name, tab=False):
+    """Ask ~/.claude/scripts/tld.py to show the session.
+
+    Contract of `tld.py open [--tab] <session>`: rc 0 and one stdout line with the tty of the
+    terminal that shows it; rc 1 when no si window is open (with --tab: when iTerm2 has no window
+    or its API failed); rc 2 when the session is unknown. Plain: an open si window shows the
+    session on its right. --tab (tld 11.11.2026): no si window → a new tab of the current iTerm2
+    window attaches the session; the app is not raised (the caller selects the tty).
+    Returns the tty or ''.
+    """
+    script = os.environ.get("JADLIS_TLD_SCRIPT") or os.path.expanduser("~/.claude/scripts/tld.py")
+    if not session_name or not os.access(script, os.X_OK):
+        return ""
+    argv = [script, "open"] + (["--tab"] if tab else []) + [session_name]
     try:
         result = subprocess.run(
-            [script, "open", session_name],
-            capture_output=True, text=True, env=env, timeout=TLD_OPEN_TIMEOUT,
+            argv, capture_output=True, text=True, env=helper_env(),
+            timeout=TLD_TAB_TIMEOUT if tab else TLD_OPEN_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"tld open {session_name}: {exc}", file=sys.stderr)
@@ -255,8 +353,8 @@ async def select_by_tty(connection, tty):
     return False
 
 
-async def select_via_tld(connection, session_name):
-    tty = tld_open(session_name)
+async def select_via_tld(connection, session_name, tab=False):
+    tty = tld_open(session_name, tab)
     return bool(tty) and await select_by_tty(connection, tty)
 
 
@@ -347,24 +445,36 @@ async def main(connection):
         return
 
     if args.pane:
+        no_client = False
         try:
             if await select_tab(connection, args.pane, args.tmux_path, args.socket):
                 return
         except RuntimeError as exc:
             # Typical: "no tmux client tty found" — the session has no tab of its own.
             print(str(exc), file=sys.stderr)
+            no_client = "no tmux client tty found" in str(exc)
         name = args.session or tmux_session_name(args.tmux_path, args.socket, args.pane)
         if await select_via_tld(connection, name):
+            return
+        # No si window and no client at all: attach the session in a new tab. A session whose
+        # client sits outside iTerm2 gets no second client.
+        if no_client and await select_via_tld(connection, name, tab=True):
             return
         print(f"No tab found for tmux pane {args.pane}", file=sys.stderr)
         sys.exit(1)
 
-    # Order: the exact iTerm2 session → an open si/tld window (zmx sessions run without
-    # ITERM_SESSION_ID) → a unique cwd match.
+    # Order: the exact iTerm2 session → for a zmx session (it runs without ITERM_SESSION_ID):
+    # the tab that already shows it, an open si window, a new tab attached to it (tld open --tab)
+    # → a unique cwd match.
     if args.termid and await select_session(connection, args.termid, ""):
         return
-    if args.session and await select_via_tld(connection, args.session):
-        return
+    if args.session:
+        if await select_zmx_tab(connection, args.session):
+            return
+        if await select_via_tld(connection, args.session):
+            return
+        if await select_via_tld(connection, args.session, tab=True):
+            return
     if args.cwd and await select_session(connection, "", args.cwd):
         return
     detail = args.termid or args.session or args.cwd

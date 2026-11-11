@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.43.5-jadlis — 2026-11-11 — клик без tmux и без окна si / click without tmux and without an si window
+
+### Для человека
+
+- Если у zmx-сессии нет своей вкладки и окно `si` закрыто, клик по уведомлению открывает сессию в новой вкладке iTerm2. Раньше клик только поднимал iTerm2.
+- Если у сессии уже есть вкладка, клик выбирает её и второй вкладки не открывает. Это работает и после того, как вкладку переключили на другую сессию через `si z1`.
+- То же для tmux-сессии без единого клиента: клик открывает её в новой вкладке.
+- Установка ставит модуль iTerm2 для клика и тогда, когда tmux на Mac нет. Раньше без tmux клик в iTerm2 не мог выбрать вкладку.
+
+### For agents
+
+- Changed: `bin/install.sh` `setup_iterm2_venv` — no `command -v tmux` gate; the venv serves tmux, zmx and plain-tab clicks.
+- Added: `scripts/iterm2-select-tab.py` `zmx_client_ttys(name)` — ttys of terminals attached to a zmx session: `zmx list` → session pid → its parent is the daemon; client processes (`zmx a|attach` with a tty) from `ps -A`; `lsof -a -U -p <daemon,clients> -F pdn` → a client whose socket peer (`n->0x…`) is a socket the daemon accepted (`d0x…`). The client's argv keeps the name it attached with after `si z1` switches it, so argv alone is not used. ~0.25 s.
+- Changed: `--session` order: termid → own zmx tab (`select_zmx_tab`) → plain `tld open` (si window) → `tld open --tab` (new iTerm2 tab, needs jadlis-tld `a30bb50`+) → unique cwd. `--pane` (tmux): after plain `tld open`, `tld open --tab` only when tmux said «no tmux client tty found» (a session with a client outside iTerm2 gets no second client).
+- Changed: `helper_env()` for tld/zmx calls drops `ZMX_SESSION` (else `zmx attach` switches that session's client), sets `TMUX=""` and a missing `TMPDIR`. `--tab` timeout 6 s (`TLD_TAB_TIMEOUT`), plain stays 3 s. Override zmx binary: `JADLIS_ZMX`.
+- Checked live (scratch `ZMX_DIR`, empty `TLD_COCKPIT`): no tab → new tab, `clients=1`, 2.1 s; second click → that tab selected, `clients=1`, 0.8 s; tmux on a scratch socket (`TLD_SOCK`) — same two cases.
+- Changed: version 1.43.4 → 1.43.5 in `plugin.json`, both fields of `marketplace.json`, `main.go`; `bin/claude-notifications-darwin-arm64` rebuilt.
+
 ## 1.43.4-jadlis — 2026-11-11 — клик по zmx-сессии при своей папке сокетов / zmx click with a custom socket dir
 
 ### Для человека

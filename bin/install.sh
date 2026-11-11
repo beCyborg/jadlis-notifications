@@ -1404,7 +1404,8 @@ EXEC_EOF
     return 0
 }
 
-# Set up iTerm2 Python API venv for tmux -CC click-to-focus (macOS only)
+# Set up the iTerm2 Python API venv for click-to-focus (macOS only): tmux -CC,
+# plain tmux, zmx sessions and plain iTerm2 tabs all go through it.
 setup_iterm2_venv() {
     # Only relevant on macOS
     [ "$(uname -s)" = "Darwin" ] || return 0
@@ -1416,8 +1417,8 @@ setup_iterm2_venv() {
     [ "$is_iterm" = false ] && [ -d "/Applications/iTerm.app" ] && is_iterm=true
     [ "$is_iterm" = true ] || return 0
 
-    # tmux must be installed
-    command -v tmux &>/dev/null || return 0
+    # No tmux requirement: a click on a zmx session or a plain iTerm2 tab needs
+    # this venv too (scripts/iterm2-select-tab.py), with or without tmux.
 
     # Use $HOME/.claude explicitly (not $CLAUDE_HOME) — the Go code resolves
     # the venv path via os.UserHomeDir()/.claude/..., so the venv must be there.
@@ -1436,13 +1437,13 @@ setup_iterm2_venv() {
 
     if [ -z "$python3_path" ]; then
         echo ""
-        echo -e "${YELLOW}  ⚠ Python 3 not found. iTerm2 tmux -CC click-to-focus unavailable.${NC}"
+        echo -e "${YELLOW}  ⚠ Python 3 not found. iTerm2 click-to-focus unavailable.${NC}"
         echo -e "${YELLOW}    Install Python 3 and re-run installer to enable.${NC}"
         return 0
     fi
 
     echo ""
-    echo -e "${BLUE}  Setting up iTerm2 tmux -CC support...${NC}"
+    echo -e "${BLUE}  Setting up iTerm2 click-to-focus support...${NC}"
 
     if ! "$python3_path" -m venv "$VENV_DIR" 2>/dev/null; then
         echo -e "${YELLOW}  ⚠ Could not create Python venv, skipping${NC}"
@@ -1681,7 +1682,7 @@ main() {
             download_terminal_notifier_modern || download_terminal_notifier
             # Icon app is optional - don't fail if icon not found
             create_claude_notifications_app || true
-            # Set up iTerm2 Python API venv for tmux -CC click-to-focus
+            # Set up iTerm2 Python API venv for click-to-focus (tmux, zmx, plain tabs)
             setup_iterm2_venv || true
         fi
 
@@ -1789,7 +1790,7 @@ main() {
         download_terminal_notifier_modern || download_terminal_notifier
         # Icon app is optional - don't fail if icon not found
         create_claude_notifications_app || true
-        # Set up iTerm2 Python API venv for tmux -CC click-to-focus
+        # Set up iTerm2 Python API venv for click-to-focus (tmux, zmx, plain tabs)
         setup_iterm2_venv || true
     fi
 
